@@ -3,10 +3,10 @@ import { FlutterBridge, BridgeMethodCall, MethodCallHandler } from './FlutterBri
 import { UIAbility } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { picker, fileIo } from '@kit.CoreFileKit';
-import { batteryInfo } from '@kit.BasicServicesKit';
+import { batteryInfo, BusinessError } from '@kit.BasicServicesKit';
 import { Want, common } from '@kit.AbilityKit';
 import { window } from '@kit.ArkUI';
-import { BusinessError } from '@kit.BasicServicesKit';
+import { userAuth } from '@kit.UserAuthenticationKit';
 
 const CHANNEL_NAME: string = 'venera/method_channel';
 const TAG: string = 'PlatformBridge';
@@ -47,10 +47,20 @@ export class PlatformBridge implements MethodCallHandler {
       this.handleSaveFile(call, result);
     } else if (call.method === 'canCheckBiometrics') {
       this.handleCanCheckBiometrics(result);
+    } else if (call.method === 'checkFaceAvailable') {
+      this.handleCheckAuthAvailable(userAuth.UserAuthType.FACE, result);
+    } else if (call.method === 'checkFingerprintAvailable') {
+      this.handleCheckAuthAvailable(userAuth.UserAuthType.FINGERPRINT, result);
     } else if (call.method === 'isDeviceSupported') {
       this.handleIsDeviceSupported(result);
     } else if (call.method === 'authenticate') {
       this.handleAuthenticate(call, result);
+    } else if (call.method === 'authenticateWithFace') {
+      this.handleAuthWithType(call, userAuth.UserAuthType.FACE, result);
+    } else if (call.method === 'authenticateWithFingerprint') {
+      this.handleAuthWithType(call, userAuth.UserAuthType.FINGERPRINT, result);
+    } else if (call.method === 'authenticateWithPin') {
+      this.handleAuthWithType(call, userAuth.UserAuthType.PIN, result);
     } else if (call.method === 'getBatteryLevel') {
       this.handleGetBatteryLevel(result);
     } else if (call.method === 'getBatteryState') {
@@ -291,15 +301,141 @@ export class PlatformBridge implements MethodCallHandler {
   }
 
   private handleCanCheckBiometrics(result: MethodResult): void {
-    result.success(true);
+    let faceOK: boolean = this.checkAuthAvailable(userAuth.UserAuthType.FACE);
+    let fpOK: boolean = this.checkAuthAvailable(userAuth.UserAuthType.FINGERPRINT);
+    result.success(faceOK || fpOK);
+  }
+
+  private checkAuthAvailable(authType: userAuth.UserAuthType): boolean {
+    try {
+      userAuth.getAvailableStatus(authType, userAuth.AuthTrustLevel.ATL2);
+      return true;
+    } catch (e) {
+      hilog.info(DOMAIN, TAG, 'Auth type ' + authType.toString() + ' not available at ATL2, trying ATL3');
+    }
+    try {
+      userAuth.getAvailableStatus(authType, userAuth.AuthTrustLevel.ATL3);
+      return true;
+    } catch (e) {
+      hilog.info(DOMAIN, TAG, 'Auth type ' + authType.toString() + ' not available');
+      return false;
+    }
+  }
+
+  private handleCheckAuthAvailable(authType: userAuth.UserAuthType, result: MethodResult): void {
+    result.success(this.checkAuthAvailable(authType));
   }
 
   private handleIsDeviceSupported(result: MethodResult): void {
-    result.success(true);
+    let authTypes: userAuth.UserAuthType[] = [
+      userAuth.UserAuthType.FACE,
+      userAuth.UserAuthType.FINGERPRINT,
+      userAuth.UserAuthType.PIN
+    ];
+    for (let i: number = 0; i < authTypes.length; i++) {
+      if (this.checkAuthAvailable(authTypes[i])) {
+        result.success(true);
+        return;
+      }
+    }
+    result.success(false);
   }
 
   private handleAuthenticate(call: BridgeMethodCall, result: MethodResult): void {
-    result.notImplemented();
+    let params: AuthenticateParams = this.parseAuthenticateArgs(call.args);
+    this.handleAuthWithType(call, userAuth.UserAuthType.FACE, result);
+  }
+
+  private handleAuthWithType(call: BridgeMethodCall, authType: userAuth.UserAuthType, result: MethodResult): void {
+    let params: AuthenticateParams = this.parseAuthenticateArgs(call.args);
+    let challenge: Uint8Array = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]);
+    let authTrustLevel: userAuth.AuthTrustLevel = userAuth.AuthTrustLevel.ATL2;
+    if (authType === userAuth.UserAuthType.PIN) {
+      authTrustLevel = userAuth.AuthTrustLevel.ATL1;
+    }
+    let authParam: userAuth.AuthParam = {
+      challenge: challenge,
+      authType: [authType],
+      authTrustLevel: authTrustLevel
+    };
+    let title: string = params.localizedReason.length > 0 ? params.localizedReason : 'Please authenticate';
+    let widgetParam: userAuth.WidgetParam = {
+      title: title
+    };
+    if (authType !== userAuth.UserAuthType.PIN) {
+      widgetParam.navigationButtonText = 'Use password';
+    }
+    try {
+      let authInstance: userAuth.UserAuthInstance = userAuth.getUserAuthInstance(authParam, widgetParam);
+      let self: PlatformBridge = this;
+      authInstance.on('result', {
+        onResult(authResult: userAuth.UserAuthResult): void {
+          if (authResult.result === userAuth.UserAuthResultCode.SUCCESS) {
+            hilog.info(DOMAIN, TAG, 'Authentication succeeded');
+            result.success(true);
+          } else if (authResult.result === 12500011 && authType !== userAuth.UserAuthType.PIN) {
+            hilog.info(DOMAIN, TAG, 'User switched to PIN fallback');
+            self.startPinAuthFallback(params.localizedReason, result);
+          } else {
+            hilog.info(DOMAIN, TAG, 'Authentication failed: ' + authResult.result.toString());
+            result.success(false);
+          }
+        }
+      });
+      authInstance.start();
+      hilog.info(DOMAIN, TAG, 'Auth started, type: ' + authType.toString());
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'Authentication exception: ' + JSON.stringify(e));
+      result.success(false);
+    }
+  }
+
+  private startPinAuthFallback(localizedReason: string, result: MethodResult): void {
+    let challenge: Uint8Array = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]);
+    let authParam: userAuth.AuthParam = {
+      challenge: challenge,
+      authType: [userAuth.UserAuthType.PIN],
+      authTrustLevel: userAuth.AuthTrustLevel.ATL1
+    };
+    let widgetParam: userAuth.WidgetParam = {
+      title: localizedReason.length > 0 ? localizedReason : 'Please authenticate'
+    };
+    try {
+      let authInstance: userAuth.UserAuthInstance = userAuth.getUserAuthInstance(authParam, widgetParam);
+      authInstance.on('result', {
+        onResult(authResult: userAuth.UserAuthResult): void {
+          if (authResult.result === userAuth.UserAuthResultCode.SUCCESS) {
+            hilog.info(DOMAIN, TAG, 'PIN fallback succeeded');
+            result.success(true);
+          } else {
+            hilog.info(DOMAIN, TAG, 'PIN fallback failed: ' + authResult.result.toString());
+            result.success(false);
+          }
+        }
+      });
+      authInstance.start();
+      hilog.info(DOMAIN, TAG, 'PIN fallback auth started');
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'PIN fallback exception');
+      result.success(false);
+    }
+  }
+
+  private parseAuthenticateArgs(args: Object | null): AuthenticateParams {
+    let res: AuthenticateParams = { localizedReason: '' };
+    if (args === null) {
+      return res;
+    }
+    try {
+      let jsonStr: string = JSON.stringify(args);
+      let parsed: AuthenticateParams = JSON.parse(jsonStr);
+      if (parsed.localizedReason !== undefined && parsed.localizedReason !== null) {
+        res.localizedReason = parsed.localizedReason;
+      }
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'Failed to parse authenticate args');
+    }
+    return res;
   }
 
   private handleGetBatteryLevel(result: MethodResult): void {
@@ -386,4 +522,8 @@ interface SaveFileParsedParams {
 
 interface SetScreenOnParams {
   on: boolean;
+}
+
+interface AuthenticateParams {
+  localizedReason: string;
 }

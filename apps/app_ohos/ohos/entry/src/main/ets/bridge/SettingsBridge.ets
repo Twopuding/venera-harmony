@@ -32,6 +32,12 @@ export class SettingsBridge implements MethodCallHandler {
   onMethodCall(call: BridgeMethodCall, result: MethodResult): void {
     if (call.method === 'authenticate') {
       this.handleAuthenticate(result);
+    } else if (call.method === 'authenticateWithFace') {
+      this.handleAuthWithType(userAuth.UserAuthType.FACE, result);
+    } else if (call.method === 'authenticateWithFingerprint') {
+      this.handleAuthWithType(userAuth.UserAuthType.FINGERPRINT, result);
+    } else if (call.method === 'authenticateWithPin') {
+      this.handleAuthWithType(userAuth.UserAuthType.PIN, result);
     } else if (call.method === 'pickDirectory') {
       this.handlePickDirectory(result);
     } else if (call.method === 'pickFile') {
@@ -48,24 +54,78 @@ export class SettingsBridge implements MethodCallHandler {
   }
 
   private handleAuthenticate(result: MethodResult): void {
-    let challenge: Uint8Array = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7]);
-    let authType: number = userAuth.UserAuthType.PIN | userAuth.UserAuthType.FACE;
-    let trustLevel: number = userAuth.AuthTrustLevel.ATL1;
+    this.handleAuthWithType(userAuth.UserAuthType.FACE, result);
+  }
+
+  private handleAuthWithType(authType: userAuth.UserAuthType, result: MethodResult): void {
+    let challenge: Uint8Array = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]);
+    let authTrustLevel: userAuth.AuthTrustLevel = userAuth.AuthTrustLevel.ATL2;
+    if (authType === userAuth.UserAuthType.PIN) {
+      authTrustLevel = userAuth.AuthTrustLevel.ATL1;
+    }
+    let authParam: userAuth.AuthParam = {
+      challenge: challenge,
+      authType: [authType],
+      authTrustLevel: authTrustLevel
+    };
+    let widgetParam: userAuth.WidgetParam = {
+      title: 'Please authenticate'
+    };
+    if (authType !== userAuth.UserAuthType.PIN) {
+      widgetParam.navigationButtonText = 'Use password';
+    }
     try {
-      let authInstance: userAuth.AuthInstance = userAuth.getAuthInstance(challenge, authType, trustLevel);
+      let authInstance: userAuth.UserAuthInstance = userAuth.getUserAuthInstance(authParam, widgetParam);
+      let self: SettingsBridge = this;
       authInstance.on('result', {
-        callback: (info: userAuth.AuthResultInfo) => {
-          if (info.result === userAuth.UserAuthResultCode.SUCCESS) {
+        onResult(authResult: userAuth.UserAuthResult): void {
+          if (authResult.result === userAuth.UserAuthResultCode.SUCCESS) {
+            hilog.info(DOMAIN, TAG, 'Authentication succeeded');
             result.success(true);
+          } else if (authResult.result === 12500011 && authType !== userAuth.UserAuthType.PIN) {
+            hilog.info(DOMAIN, TAG, 'User switched to PIN fallback');
+            self.startPinAuthFallback(result);
           } else {
+            hilog.info(DOMAIN, TAG, 'Authentication failed: ' + authResult.result.toString());
             result.success(false);
           }
         }
       });
       authInstance.start();
-      hilog.info(DOMAIN, TAG, 'Authentication started');
+      hilog.info(DOMAIN, TAG, 'Auth started, type: ' + authType.toString());
     } catch (e) {
-      hilog.error(DOMAIN, TAG, 'Authentication failed');
+      hilog.error(DOMAIN, TAG, 'Authentication exception: ' + JSON.stringify(e));
+      result.success(false);
+    }
+  }
+
+  private startPinAuthFallback(result: MethodResult): void {
+    let challenge: Uint8Array = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]);
+    let authParam: userAuth.AuthParam = {
+      challenge: challenge,
+      authType: [userAuth.UserAuthType.PIN],
+      authTrustLevel: userAuth.AuthTrustLevel.ATL1
+    };
+    let widgetParam: userAuth.WidgetParam = {
+      title: 'Please authenticate'
+    };
+    try {
+      let authInstance: userAuth.UserAuthInstance = userAuth.getUserAuthInstance(authParam, widgetParam);
+      authInstance.on('result', {
+        onResult(authResult: userAuth.UserAuthResult): void {
+          if (authResult.result === userAuth.UserAuthResultCode.SUCCESS) {
+            hilog.info(DOMAIN, TAG, 'PIN fallback succeeded');
+            result.success(true);
+          } else {
+            hilog.info(DOMAIN, TAG, 'PIN fallback failed: ' + authResult.result.toString());
+            result.success(false);
+          }
+        }
+      });
+      authInstance.start();
+      hilog.info(DOMAIN, TAG, 'PIN fallback auth started');
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'PIN fallback exception');
       result.success(false);
     }
   }

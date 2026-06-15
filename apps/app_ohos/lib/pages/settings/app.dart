@@ -177,6 +177,31 @@ class _AppSettingsState extends State<AppSettings> {
                   return;
                 }
               }
+              setState(() {});
+            },
+          ).toSliver(),
+        if (!App.isLinux && appdata.settings['authorizationRequired'] == true)
+          _SwitchSetting(
+            title: "Face Recognition".tl,
+            settingKey: "useFaceAuth",
+            onChanged: () {
+              if (appdata.settings['useFaceAuth'] == true) {
+                appdata.settings['useFingerprintAuth'] = false;
+              }
+              appdata.saveData();
+              setState(() {});
+            },
+          ).toSliver(),
+        if (!App.isLinux && appdata.settings['authorizationRequired'] == true)
+          _SwitchSetting(
+            title: "Fingerprint Recognition".tl,
+            settingKey: "useFingerprintAuth",
+            onChanged: () {
+              if (appdata.settings['useFingerprintAuth'] == true) {
+                appdata.settings['useFaceAuth'] = false;
+              }
+              appdata.saveData();
+              setState(() {});
             },
           ).toSliver(),
       ],

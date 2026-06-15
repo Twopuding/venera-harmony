@@ -7,12 +7,24 @@
 - 多源漫画浏览与搜索
 - 漫画阅读器（6 种阅读模式：画廊左右/右左/上下、连续上下/左右/右左）
 - 内置 WebView（支持 Cloudflare 验证绕过）
-- 生物认证 / 密码锁
+- 生物认证 / 密码锁（人脸识别 / 指纹识别 + PIN 回退）
 - 漫画下载与本地管理
 - 收藏与阅读历史
 - WebDAV 数据同步
 - 动态配色 / 主题切换
 - 多语言支持（中文简繁、英文）
+
+## 生物认证
+
+基于 HarmonyOS `@kit.UserAuthenticationKit` 实现：
+
+- **权限**：`ohos.permission.ACCESS_BIOMETRIC`（system_grant）
+- **认证流程**：
+  1. 用户可在设置中选择"人脸识别"或"指纹识别"作为首选认证方式
+  2. 认证时先尝试所选的生物认证方式（ATL2）
+  3. 生物认证界面提供"使用密码"导航按钮，点击后回退到 PIN 码验证（ATL1）
+- **API**：`getUserAuthInstance(AuthParam, WidgetParam)`（API 10+）
+- **错误处理**：认证失败返回 401 时自动降级
 
 ## 架构
 

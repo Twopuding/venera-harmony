@@ -3,6 +3,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:venera/platform/ohos_platform_services.dart';
 import 'package:venera/utils/translations.dart';
+import 'package:venera/foundation/appdata.dart';
 
 class AuthPage extends StatefulWidget {
   const AuthPage({super.key, this.onSuccessfulAuth});
@@ -60,9 +61,27 @@ class _AuthPageState extends State<AuthPage> {
       widget.onSuccessfulAuth?.call();
       return;
     }
-    var isAuthorized = await OhosLocalAuth.authenticate(
-      localizedReason: "Please authenticate to continue".tl,
-    );
+    String localizationReason = "Please authenticate to continue".tl;
+    bool useFace = appdata.settings['useFaceAuth'] == true;
+    bool useFp = appdata.settings['useFingerprintAuth'] == true;
+    bool faceAvailable = await OhosLocalAuth.canCheckFace();
+    bool fpAvailable = await OhosLocalAuth.canCheckFingerprint();
+    bool isAuthorized = false;
+    if (useFace && faceAvailable) {
+      isAuthorized = await OhosLocalAuth.authenticateWithFace(
+        localizedReason: localizationReason,
+      );
+    }
+    if (!isAuthorized && useFp && fpAvailable) {
+      isAuthorized = await OhosLocalAuth.authenticateWithFingerprint(
+        localizedReason: localizationReason,
+      );
+    }
+    if (!isAuthorized) {
+      isAuthorized = await OhosLocalAuth.authenticateWithPin(
+        localizedReason: localizationReason,
+      );
+    }
     if (isAuthorized) {
       widget.onSuccessfulAuth?.call();
     }

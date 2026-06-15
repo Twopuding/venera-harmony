@@ -98,6 +98,24 @@ class OhosLocalAuth {
     }
   }
 
+  static Future<bool> canCheckFace() async {
+    try {
+      var result = await _channel.invokeMethod<bool>('checkFaceAvailable');
+      return result ?? false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
+  static Future<bool> canCheckFingerprint() async {
+    try {
+      var result = await _channel.invokeMethod<bool>('checkFingerprintAvailable');
+      return result ?? false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
   static Future<bool> isDeviceSupported() async {
     try {
       var result = await _channel.invokeMethod<bool>('isDeviceSupported');
@@ -110,6 +128,39 @@ class OhosLocalAuth {
   static Future<bool> authenticate({required String localizedReason}) async {
     try {
       var result = await _channel.invokeMethod<bool>('authenticate', {
+        'localizedReason': localizedReason,
+      });
+      return result ?? false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
+  static Future<bool> authenticateWithFace({required String localizedReason}) async {
+    try {
+      var result = await _channel.invokeMethod<bool>('authenticateWithFace', {
+        'localizedReason': localizedReason,
+      });
+      return result ?? false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
+  static Future<bool> authenticateWithFingerprint({required String localizedReason}) async {
+    try {
+      var result = await _channel.invokeMethod<bool>('authenticateWithFingerprint', {
+        'localizedReason': localizedReason,
+      });
+      return result ?? false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
+  static Future<bool> authenticateWithPin({required String localizedReason}) async {
+    try {
+      var result = await _channel.invokeMethod<bool>('authenticateWithPin', {
         'localizedReason': localizedReason,
       });
       return result ?? false;
