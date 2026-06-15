@@ -1,0 +1,11 @@
+name: photo_view
+description: Stub for photo_view on HarmonyOS
+version: 0.0.1
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.4.4 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter

@@ -1,0 +1,40 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "模块描述"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "description"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "app_ohos"
+    },
+    {
+      "name": "ReaderAbility_desc",
+      "value": "漫画阅读器"
+    },
+    {
+      "name": "ReaderAbility_label",
+      "value": "阅读器"
+    },
+    {
+      "name": "WebViewAbility_desc",
+      "value": "网页查看器"
+    },
+    {
+      "name": "WebViewAbility_label",
+      "value": "网页"
+    },
+    {
+      "name": "SettingsAbility_desc",
+      "value": "设置"
+    },
+    {
+      "name": "SettingsAbility_label",
+      "value": "设置"
+    }
+  ]
+}

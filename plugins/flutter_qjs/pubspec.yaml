@@ -1,0 +1,28 @@
+name: flutter_qjs
+description: Simple JS engine for Flutter using QuickJS with dart:ffi (ohos fork)
+version: 0.3.7-ohos.1
+homepage: https://github.com/venera-app/flutter_qjs
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  ffi: ^2.0.0
+
+flutter:
+  plugin:
+    implements: flutter_qjs
+    platforms:
+      android:
+        ffiPlugin: true
+      ios:
+        ffiPlugin: true
+      macos:
+        ffiPlugin: true
+      linux:
+        pluginClass: FlutterQjsPlugin
+      windows:
+        pluginClass: FlutterQjsPlugin

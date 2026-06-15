@@ -1,0 +1,11 @@
+name: app_links
+description: Stub for app_links on HarmonyOS
+version: 0.0.1
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.4.4 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter

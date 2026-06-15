@@ -1,0 +1,40 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "module description"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "description"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "Venera"
+    },
+    {
+      "name": "ReaderAbility_desc",
+      "value": "Comic Reader"
+    },
+    {
+      "name": "ReaderAbility_label",
+      "value": "Reader"
+    },
+    {
+      "name": "WebViewAbility_desc",
+      "value": "Web Viewer"
+    },
+    {
+      "name": "WebViewAbility_label",
+      "value": "WebView"
+    },
+    {
+      "name": "SettingsAbility_desc",
+      "value": "Settings"
+    },
+    {
+      "name": "SettingsAbility_label",
+      "value": "Settings"
+    }
+  ]
+}

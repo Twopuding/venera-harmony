@@ -1,0 +1,74 @@
+
+{
+  "module": {
+    "name": "entry",
+    "type": "entry",
+    "description": "$string:module_desc",
+    "mainElement": "EntryAbility",
+    "deviceTypes": [
+      "phone",
+      "tablet"
+    ],
+    "deliveryWithInstall": true,
+    "installationFree": false,
+    "pages": "$profile:main_pages",
+    "abilities": [
+      {
+        "name": "EntryAbility",
+        "srcEntry": "./ets/entryability/EntryAbility.ets",
+        "description": "$string:EntryAbility_desc",
+        "icon": "$media:icon",
+        "label": "$string:EntryAbility_label",
+        "startWindowIcon": "$media:icon",
+        "startWindowBackground": "$color:start_window_background",
+        "exported": true,
+        "skills": [
+          {
+            "entities": [
+              "entity.system.home"
+            ],
+            "actions": [
+              "action.system.home"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "ReaderAbility",
+        "srcEntry": "./ets/readerability/ReaderAbility.ets",
+        "description": "$string:ReaderAbility_desc",
+        "icon": "$media:icon",
+        "label": "$string:ReaderAbility_label",
+        "startWindowIcon": "$media:icon",
+        "startWindowBackground": "$color:start_window_background",
+        "exported": false,
+        "launchType": "singleton"
+      },
+      {
+        "name": "WebViewAbility",
+        "srcEntry": "./ets/webviewability/WebViewAbility.ets",
+        "description": "$string:WebViewAbility_desc",
+        "icon": "$media:icon",
+        "label": "$string:WebViewAbility_label",
+        "startWindowIcon": "$media:icon",
+        "startWindowBackground": "$color:start_window_background",
+        "exported": false,
+        "launchType": "standard"
+      },
+      {
+        "name": "SettingsAbility",
+        "srcEntry": "./ets/settingsability/SettingsAbility.ets",
+        "description": "$string:SettingsAbility_desc",
+        "icon": "$media:icon",
+        "label": "$string:SettingsAbility_label",
+        "startWindowIcon": "$media:icon",
+        "startWindowBackground": "$color:start_window_background",
+        "exported": false,
+        "launchType": "singleton"
+      }
+    ],
+    "requestPermissions": [
+      {"name" :  "ohos.permission.INTERNET"},
+    ]
+  }
+}

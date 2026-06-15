@@ -1,0 +1,84 @@
+{
+  "color": [
+    {
+      "name": "start_window_background",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "page_background",
+      "value": "#F1F3F5"
+    },
+    {
+      "name": "card_background",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "card_border",
+      "value": "#1AFFFFFF"
+    },
+    {
+      "name": "text_primary",
+      "value": "#182431"
+    },
+    {
+      "name": "text_secondary",
+      "value": "#99182431"
+    },
+    {
+      "name": "text_on_emphasize",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "color_emphasize",
+      "value": "#007DFF"
+    },
+    {
+      "name": "color_warn",
+      "value": "#E84026"
+    },
+    {
+      "name": "component_regular_bg",
+      "value": "#0C182431"
+    },
+    {
+      "name": "icon_secondary",
+      "value": "#99182431"
+    },
+    {
+      "name": "icon_primary",
+      "value": "#182431"
+    },
+    {
+      "name": "divider_color",
+      "value": "#33182431"
+    },
+    {
+      "name": "search_bar_bg",
+      "value": "#0F182431"
+    },
+    {
+      "name": "shadow_light",
+      "value": "#0A000000"
+    },
+    {
+      "name": "overlay_background",
+      "value": "#66000000"
+    },
+    {
+      "name": "badge_bg",
+      "value": "#007DFF"
+    },
+    {
+      "name": "tag_bg",
+      "value": "#0C182431"
+    },
+    {
+      "name": "placeholder_bg",
+      "value": "#0C182431"
+    },
+    {
+      "name": "button_normal_bg",
+      "value": "#0F182431"
+    }
+  ]
+}
