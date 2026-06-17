@@ -2,7 +2,29 @@
 {
   "apiType": 'stageMode',
   "buildOption": {
+    "nativeLib": {
+      "filter": {
+        "excludes": [
+          "**/x86_64/*.so"
+        ]
+      }
+    }
   },
+  "buildOptionSet": [
+    {
+      "name": "release",
+      "arkOptions": {
+        "obfuscation": {
+          "ruleOptions": {
+            "enable": true,
+            "files": [
+              "./obfuscation-rules.txt"
+            ]
+          }
+        }
+      }
+    }
+  ],
   "targets": [
     {
       "name": "default",
