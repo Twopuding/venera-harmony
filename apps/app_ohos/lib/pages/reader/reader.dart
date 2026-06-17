@@ -271,6 +271,7 @@ class _ReaderState extends State<Reader>
 
   @override
   void dispose() {
+    flushHistory();
     if (isFullscreen) {
       fullscreen();
     }
@@ -328,46 +329,59 @@ class _ReaderState extends State<Reader>
   /// `HistoryManager().addHistoryAsync` is a high-cost operation because it creates a new isolate.
   Timer? _updateHistoryTimer;
 
-  void updateHistory() {
-    if (history != null) {
-      // page >= maxPage handles both last image page and chapter comments page
-      if (page >= maxPage) {
-        /// Record the last image of chapter
-        history!.page = images?.length ?? 1;
+  void _applyHistoryFields() {
+    if (history == null) return;
+    // page >= maxPage handles both last image page and chapter comments page
+    if (page >= maxPage) {
+      /// Record the last image of chapter
+      history!.page = images?.length ?? 1;
+    } else {
+      /// Record the first image of the page
+      if (!showSingleImageOnFirstPage() || imagesPerPage == 1) {
+        history!.page = (page - 1) * imagesPerPage + 1;
       } else {
-        /// Record the first image of the page
-        if (!showSingleImageOnFirstPage() || imagesPerPage == 1) {
-          history!.page = (page - 1) * imagesPerPage + 1;
+        if (page == 1) {
+          history!.page = 1;
         } else {
-          if (page == 1) {
-            history!.page = 1;
-          } else {
-            history!.page = (page - 2) * imagesPerPage + 2;
-          }
+          history!.page = (page - 2) * imagesPerPage + 2;
         }
       }
-      history!.maxPage = images?.length ?? 1;
-      if (widget.chapters?.isGrouped ?? false) {
-        int g = 0;
-        int c = chapter;
-        while (c > widget.chapters!.getGroupByIndex(g).length) {
-          c -= widget.chapters!.getGroupByIndex(g).length;
-          g++;
-        }
-        history!.readEpisode.add('${g + 1}-$c');
-        history!.ep = c;
-        history!.group = g + 1;
-      } else {
-        history!.readEpisode.add(chapter.toString());
-        history!.ep = chapter;
-      }
-      history!.time = DateTime.now();
-      _updateHistoryTimer?.cancel();
-      _updateHistoryTimer = Timer(const Duration(seconds: 1), () {
-        HistoryManager().addHistoryAsync(history!);
-        _updateHistoryTimer = null;
-      });
     }
+    history!.maxPage = images?.length ?? 1;
+    if (widget.chapters?.isGrouped ?? false) {
+      int g = 0;
+      int c = chapter;
+      while (c > widget.chapters!.getGroupByIndex(g).length) {
+        c -= widget.chapters!.getGroupByIndex(g).length;
+        g++;
+      }
+      history!.readEpisode.add('${g + 1}-$c');
+      history!.ep = c;
+      history!.group = g + 1;
+    } else {
+      history!.readEpisode.add(chapter.toString());
+      history!.ep = chapter;
+    }
+    history!.time = DateTime.now();
+  }
+
+  void updateHistory() {
+    if (history == null) return;
+    _applyHistoryFields();
+    _updateHistoryTimer?.cancel();
+    _updateHistoryTimer = Timer(const Duration(seconds: 1), () {
+      HistoryManager().addHistoryAsync(history!);
+      _updateHistoryTimer = null;
+    });
+  }
+
+  /// Persist reading progress immediately (e.g. when leaving the reader).
+  void flushHistory() {
+    _updateHistoryTimer?.cancel();
+    _updateHistoryTimer = null;
+    if (history == null) return;
+    _applyHistoryFields();
+    HistoryManager().addHistoryAsync(history!);
   }
 
   bool get isFirstChapterOfGroup {

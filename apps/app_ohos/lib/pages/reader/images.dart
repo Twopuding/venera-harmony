@@ -743,6 +743,7 @@ class _ContinuousModeState extends State<_ContinuousMode>
     itemPositionsListener.itemPositions.removeListener(onPositionChanged);
     _historyDebounce?.cancel();
     _filterQualityTimer?.cancel();
+    reader.flushHistory();
     super.dispose();
   }
 

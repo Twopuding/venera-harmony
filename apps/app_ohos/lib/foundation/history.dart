@@ -258,13 +258,26 @@ class HistoryManager with ChangeNotifier {
 
   /// Create a isolate to add history to prevent blocking the UI thread.
   Future<void> addHistoryAsync(History newItem) async {
+    // Isolate + shared sqlite pointer is unreliable on HarmonyOS.
+    if (App.isOhos) {
+      addHistory(newItem);
+      return;
+    }
+
     while (_haveAsyncTask) {
       await Future.delayed(Duration(milliseconds: 20));
     }
 
     _haveAsyncTask = true;
-    await _addHistoryAsync(_db.handle.address, newItem);
-    _haveAsyncTask = false;
+    try {
+      await _addHistoryAsync(_db.handle.address, newItem);
+    } catch (e, s) {
+      Log.error("History", "addHistoryAsync failed, using sync fallback: $e\n$s");
+      addHistory(newItem);
+      return;
+    } finally {
+      _haveAsyncTask = false;
+    }
     if (_cachedHistoryIds == null) {
       updateCache();
     } else {
