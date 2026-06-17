@@ -26,6 +26,8 @@ class ComicImage extends StatefulWidget {
     int? cacheHeight,
     this.onInit,
     this.onDispose,
+    this.imageCacheKey,
+    this.placeholderHeightFactor = 1.4,
   })  : image = ResizeImage.resizeIfNeeded(cacheWidth, cacheHeight, image),
         assert(cacheWidth == null || cacheWidth > 0),
         assert(cacheHeight == null || cacheHeight > 0);
@@ -66,7 +68,19 @@ class ComicImage extends StatefulWidget {
 
   final void Function(State<ComicImage> state)? onDispose;
 
-  static void clear() => _ComicImageState.clear();
+  /// Stable key for cross-session image dimension cache (e.g. image URL).
+  final String? imageCacheKey;
+
+  /// Used when [width] is infinite and dimensions are unknown yet.
+  final double placeholderHeightFactor;
+
+  static final Map<String, Size> _cache = {};
+
+  static void clear() => _cache.clear();
+
+  static Size? getCachedSize(String imageKey) => _cache[imageKey];
+
+  static void cacheSize(String imageKey, Size size) => _cache[imageKey] = size;
 
   @override
   State<ComicImage> createState() => _ComicImageState();
@@ -84,9 +98,8 @@ class _ComicImageState extends State<ComicImage> with WidgetsBindingObserver {
   Object? _lastException;
   ImageStreamCompleterHandle? _completerHandle;
 
-  static final Map<int, Size> _cache = {};
-
-  static clear() => _cache.clear();
+  String get _sizeCacheKey =>
+      widget.imageCacheKey ?? widget.image.toString();
 
   @override
   void initState() {
@@ -341,11 +354,16 @@ class _ComicImageState extends State<ComicImage> with WidgetsBindingObserver {
 
       if (_imageInfo != null) {
         // Record the height and the width of the image
-        _cache[widget.image.hashCode] = Size(_imageInfo!.image.width.toDouble(),
-            _imageInfo!.image.height.toDouble());
+        ComicImage.cacheSize(
+          _sizeCacheKey,
+          Size(
+            _imageInfo!.image.width.toDouble(),
+            _imageInfo!.image.height.toDouble(),
+          ),
+        );
       }
 
-      Size? cacheSize = _cache[widget.image.hashCode];
+      Size? cacheSize = ComicImage.getCachedSize(_sizeCacheKey);
       if (cacheSize != null) {
         if (width == double.infinity) {
           width = constrains.maxWidth;
@@ -357,10 +375,10 @@ class _ComicImageState extends State<ComicImage> with WidgetsBindingObserver {
       } else {
         if (width == double.infinity) {
           width = constrains.maxWidth;
-          height = 300;
+          height = width * widget.placeholderHeightFactor;
         } else if (height == double.infinity) {
           height = constrains.maxHeight;
-          width = 300;
+          width = height / widget.placeholderHeightFactor;
         }
       }
 

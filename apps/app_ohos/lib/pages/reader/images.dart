@@ -313,10 +313,14 @@ class _GalleryModeState extends State<_GalleryMode>
         builder: (BuildContext context, int index) {
           if (index == 0 || index == totalPages + 1) {
             return PhotoViewGalleryPageOptions.customChild(
+              minScale: PhotoViewComputedScale.contained * 1.0,
+              maxScale: PhotoViewComputedScale.covered * 10.0,
               child: const SizedBox(),
             );
           } else if (isChapterCommentsPage(index)) {
             return PhotoViewGalleryPageOptions.customChild(
+              minScale: PhotoViewComputedScale.contained * 1.0,
+              maxScale: PhotoViewComputedScale.covered * 10.0,
               child: _buildChapterCommentsPage(),
             );
           } else {
@@ -340,6 +344,8 @@ class _GalleryModeState extends State<_GalleryMode>
                   startIndex + 1,
                 ),
                 fit: BoxFit.contain,
+                minScale: PhotoViewComputedScale.contained * 1.0,
+                maxScale: PhotoViewComputedScale.covered * 10.0,
                 errorBuilder: (_, error, s, retry) {
                   return NetworkError(message: error.toString(), retry: retry);
                 },
@@ -667,6 +673,7 @@ class _ContinuousModeState extends State<_ContinuousMode>
 
   var itemScrollController = ItemScrollController();
   var itemPositionsListener = ItemPositionsListener.create();
+  final itemExtentRegistry = ItemExtentRegistry();
   var photoViewController = PhotoViewController();
   ScrollController? _scrollController;
 
@@ -676,6 +683,10 @@ class _ContinuousModeState extends State<_ContinuousMode>
   static var _isMouseScrolling = false;
   var fingers = 0;
   bool disableScroll = false;
+  bool _useLowFilterQuality = false;
+
+  Timer? _historyDebounce;
+  Timer? _filterQualityTimer;
 
   late List<bool> cached;
 
@@ -709,6 +720,17 @@ class _ContinuousModeState extends State<_ContinuousMode>
     reader._imageViewController = this;
     itemPositionsListener.itemPositions.addListener(onPositionChanged);
     cached = List.filled(reader.maxPage + 2, false);
+    itemExtentRegistry.seedExtent(0, 0);
+    itemExtentRegistry.seedExtent(reader.maxPage + 1, 0);
+    _seedKnownExtents();
+    Future.microtask(() async {
+      if (!mounted) return;
+      await _probeImageDimensions(
+        reader,
+        extentRegistry: itemExtentRegistry,
+        layoutWidth: _layoutWidth(context),
+      );
+    });
     Future.delayed(
       const Duration(milliseconds: 100),
       () => cacheImages(reader.page),
@@ -719,7 +741,56 @@ class _ContinuousModeState extends State<_ContinuousMode>
   @override
   void dispose() {
     itemPositionsListener.itemPositions.removeListener(onPositionChanged);
+    _historyDebounce?.cancel();
+    _filterQualityTimer?.cancel();
     super.dispose();
+  }
+
+  double _layoutWidth(BuildContext context) {
+    var width = reader.size.width;
+    if (appdata.settings['limitImageWidth'] &&
+        width / reader.size.height > 0.7 &&
+        reader.mode == ReaderMode.continuousTopToBottom) {
+      width = reader.size.height * 0.7;
+    }
+    return width;
+  }
+
+  void _seedKnownExtents() {
+    final images = reader.images;
+    if (images == null) return;
+    final layoutWidth = _layoutWidth(context);
+    for (int i = 0; i < images.length; i++) {
+      final size = ComicImage.getCachedSize(images[i]);
+      if (size == null) continue;
+      itemExtentRegistry.seedExtent(
+        i + 1,
+        layoutWidth * size.height / size.width,
+      );
+    }
+  }
+
+  void _scheduleHistoryUpdate() {
+    _historyDebounce?.cancel();
+    _historyDebounce = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        reader.updateHistory();
+      }
+    });
+  }
+
+  void _setScrollingFilterQuality(bool scrolling) {
+    if (_useLowFilterQuality == scrolling) return;
+    _filterQualityTimer?.cancel();
+    if (scrolling) {
+      setState(() => _useLowFilterQuality = true);
+      return;
+    }
+    _filterQualityTimer = Timer(const Duration(milliseconds: 200), () {
+      if (mounted) {
+        setState(() => _useLowFilterQuality = false);
+      }
+    });
   }
 
   void onPositionChanged() {
@@ -729,8 +800,9 @@ class _ContinuousModeState extends State<_ContinuousMode>
     var page = itemPositionsListener.itemPositions.value.first.index;
     page = page.clamp(1, reader.maxPage);
     if (page != reader.page) {
-      reader.setPage(page);
-      context.readerScaffold.update();
+      reader.setPageQuiet(page);
+      context.readerScaffold.updatePageInfo();
+      _scheduleHistoryUpdate();
     }
     cacheImages(page);
   }
@@ -794,11 +866,16 @@ class _ContinuousModeState extends State<_ContinuousMode>
   }
 
   void cacheImages(int current) {
-    for (int i = current + 1; i <= current + preCacheCount; i++) {
-      if (i <= reader.maxPage && !cached[i]) {
-        _preDownloadImage(i, context);
-        cached[i] = true;
+    for (int i = current - 1; i <= current + preCacheCount; i++) {
+      if (i < 1 || i > reader.maxPage || cached[i]) {
+        continue;
       }
+      if ((i - current).abs() <= 1) {
+        _precacheImage(i, context);
+      } else {
+        _preDownloadImage(i, context);
+      }
+      cached[i] = true;
     }
   }
 
@@ -835,10 +912,14 @@ class _ContinuousModeState extends State<_ContinuousMode>
 
   @override
   Widget build(BuildContext context) {
+    final filterQuality =
+        _useLowFilterQuality ? FilterQuality.low : FilterQuality.medium;
+
     Widget widget = ScrollablePositionedList.builder(
       initialScrollIndex: reader.page,
       itemScrollController: itemScrollController,
       itemPositionsListener: itemPositionsListener,
+      itemExtentRegistry: itemExtentRegistry,
       scrollControllerCallback: (scrollController) {
         if (_scrollController != null) {
           _scrollController!.removeListener(onScroll);
@@ -869,18 +950,23 @@ class _ContinuousModeState extends State<_ContinuousMode>
           width = double.infinity;
         }
 
+        final imageKey = reader.images![index - 1];
         ImageProvider image = _createImageProvider(index, context);
 
-        return ColoredBox(
-          color: context.colorScheme.surface,
-          child: ComicImage(
-            filterQuality: FilterQuality.medium,
-            image: image,
-            width: width,
-            height: height,
-            fit: BoxFit.contain,
-            onInit: (state) => imageStates.add(state),
-            onDispose: (state) => imageStates.remove(state),
+        return RepaintBoundary(
+          child: ColoredBox(
+            color: context.colorScheme.surface,
+            child: ComicImage(
+              filterQuality: filterQuality,
+              image: image,
+              imageCacheKey: imageKey,
+              width: width,
+              height: height,
+              fit: BoxFit.contain,
+              gaplessPlayback: true,
+              onInit: (state) => imageStates.add(state),
+              onDispose: (state) => imageStates.remove(state),
+            ),
           ),
         );
       },
@@ -978,8 +1064,12 @@ class _ContinuousModeState extends State<_ContinuousMode>
       onNotification: (notification) {
         if (notification is ScrollStartNotification) {
           delayedSetIsScrolling(true);
+          _setScrollingFilterQuality(true);
         } else if (notification is ScrollEndNotification) {
           delayedSetIsScrolling(false);
+          _setScrollingFilterQuality(false);
+          _historyDebounce?.cancel();
+          reader.updateHistory();
         }
 
         var scale = photoViewController.scale ?? 1.0;
@@ -1247,6 +1337,63 @@ void _precacheImage(int page, BuildContext context) {
     return;
   }
   precacheImage(_createImageProvider(page, context), context);
+}
+
+Future<void> _probeImageDimensions(
+  _ReaderState reader, {
+  ItemExtentRegistry? extentRegistry,
+  double? layoutWidth,
+}) async {
+  final images = reader.images;
+  if (images == null || images.isEmpty) return;
+
+  final cid = reader.cid;
+  final eid = reader.eid;
+  final sourceKey = reader.type.comicSource?.key;
+
+  for (final imageKey in images) {
+    if (ComicImage.getCachedSize(imageKey) != null) continue;
+    try {
+      Uint8List? bytes;
+      if (imageKey.startsWith('file://')) {
+        final file = File(imageKey.substring(7));
+        if (await file.exists()) {
+          bytes = await file.readAsBytes();
+        }
+      } else {
+        final cache = await CacheManager().findCache(
+          '$imageKey@$sourceKey@$cid@$eid',
+        );
+        if (cache != null) {
+          bytes = await cache.readAsBytes();
+        }
+      }
+      if (bytes == null || bytes.isEmpty) continue;
+      final codec = await instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      ComicImage.cacheSize(
+        imageKey,
+        Size(
+          frame.image.width.toDouble(),
+          frame.image.height.toDouble(),
+        ),
+      );
+      frame.image.dispose();
+      codec.dispose();
+    } catch (_) {
+      // Ignore probe failures for uncached remote images.
+    }
+  }
+
+  if (extentRegistry == null || layoutWidth == null) return;
+  for (int i = 0; i < images.length; i++) {
+    final size = ComicImage.getCachedSize(images[i]);
+    if (size == null) continue;
+    extentRegistry.seedExtent(
+      i + 1,
+      layoutWidth * size.height / size.width,
+    );
+  }
 }
 
 /// [_preDownloadImage] is used to download the image for the given page.

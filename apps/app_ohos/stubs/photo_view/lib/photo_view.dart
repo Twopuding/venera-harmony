@@ -134,6 +134,15 @@ class PhotoViewControllerValue {
   });
 }
 
+double _resolveScale(Object? scale, {required double fallback}) {
+  if (scale == null) return fallback;
+  if (scale is double) return scale;
+  if (scale is int) return scale.toDouble();
+  if (scale is PhotoViewComputedScale) return scale.value;
+  if (scale is num) return scale.toDouble();
+  return fallback;
+}
+
 class _PhotoViewState extends State<PhotoView> {
   late PhotoViewController _controller;
   late TransformationController _transformationController;
@@ -186,12 +195,8 @@ class _PhotoViewState extends State<PhotoView> {
           const BoxDecoration(color: Color(0xFF000000)),
       child: InteractiveViewer(
         transformationController: _transformationController,
-        minScale: (widget.minScale is double)
-            ? widget.minScale as double
-            : (widget.minScale as PhotoViewComputedScale?)?.value ?? 0.0,
-        maxScale: (widget.maxScale is double)
-            ? widget.maxScale as double
-            : (widget.maxScale as PhotoViewComputedScale?)?.value ?? double.infinity,
+        minScale: _resolveScale(widget.minScale, fallback: 1.0),
+        maxScale: _resolveScale(widget.maxScale, fallback: double.infinity),
         child: heroWrapper,
       ),
     );

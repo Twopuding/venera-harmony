@@ -94,12 +94,18 @@ class _ReaderScaffoldState extends State<_ReaderScaffold> {
       SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     }
     super.initState();
+    Future.microtask(() {
+      if (mounted) {
+        _pageInfoNotifier.value = context.reader.page;
+      }
+    });
     Future.delayed(const Duration(milliseconds: 200), addDragListener);
   }
 
   @override
   void dispose() {
     sliderFocus.dispose();
+    _pageInfoNotifier.dispose();
     super.dispose();
   }
 
@@ -120,7 +126,14 @@ class _ReaderScaffoldState extends State<_ReaderScaffold> {
 
   bool? rotation;
 
+  final ValueNotifier<int> _pageInfoNotifier = ValueNotifier(0);
+
+  void updatePageInfo() {
+    _pageInfoNotifier.value = context.reader.page;
+  }
+
   void update() {
+    _pageInfoNotifier.value = context.reader.page;
     setState(() {});
   }
 
@@ -598,37 +611,42 @@ class _ReaderScaffoldState extends State<_ReaderScaffold> {
   }
 
   Widget buildPageInfoText() {
-    var epName =
-        context.reader.widget.chapters?.titles.elementAtOrNull(
-          context.reader.chapter - 1,
-        ) ??
-        "E${context.reader.chapter}";
-    if (epName.length > 8) {
-      epName = "${epName.substring(0, 8)}...";
-    }
-    var pageText = "${context.reader.page}/${context.reader.maxPage}";
-    var text = context.reader.widget.chapters != null
-        ? "$epName : $pageText"
-        : pageText;
+    return ValueListenableBuilder<int>(
+      valueListenable: _pageInfoNotifier,
+      builder: (context, _, __) {
+        var epName =
+            context.reader.widget.chapters?.titles.elementAtOrNull(
+              context.reader.chapter - 1,
+            ) ??
+            "E${context.reader.chapter}";
+        if (epName.length > 8) {
+          epName = "${epName.substring(0, 8)}...";
+        }
+        var pageText = "${context.reader.page}/${context.reader.maxPage}";
+        var text = context.reader.widget.chapters != null
+            ? "$epName : $pageText"
+            : pageText;
 
-    return Positioned(
-      bottom: 13,
-      left: 25,
-      child: Stack(
-        children: [
-          Text(
-            text,
-            style: TextStyle(
-              fontSize: 14,
-              foreground: Paint()
-                ..style = PaintingStyle.stroke
-                ..strokeWidth = 1.4
-                ..color = context.colorScheme.onInverseSurface,
-            ),
+        return Positioned(
+          bottom: 13,
+          left: 25,
+          child: Stack(
+            children: [
+              Text(
+                text,
+                style: TextStyle(
+                  fontSize: 14,
+                  foreground: Paint()
+                    ..style = PaintingStyle.stroke
+                    ..strokeWidth = 1.4
+                    ..color = context.colorScheme.onInverseSurface,
+                ),
+              ),
+              Text(text),
+            ],
           ),
-          Text(text),
-        ],
-      ),
+        );
+      },
     );
   }
 

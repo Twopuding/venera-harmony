@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' show instantiateImageCodec;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -633,6 +634,14 @@ abstract mixin class _ReaderLocation {
       return;
     }
     this.page = page;
+  }
+
+  /// Update page without recording history (used during continuous scroll).
+  void setPageQuiet(int page) {
+    if (_animationCount > 0 && _pendingPage != null && page != _pendingPage) {
+      return;
+    }
+    _page = page;
   }
 
   bool _validatePage(int page) {
