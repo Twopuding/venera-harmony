@@ -37,7 +37,7 @@ export class WebViewBridge implements MethodCallHandler {
     let url: string = this.extractUrl(call.args);
     AppStorage.setOrCreate<string>(STORAGE_KEY_URL, url);
     let want: Want = {
-      bundleName: 'com.twopuding.veneraoh',
+      bundleName: 'com.venera.ohos',
       abilityName: 'WebViewAbility'
     };
     this.context.context.startAbility(want).then(() => {

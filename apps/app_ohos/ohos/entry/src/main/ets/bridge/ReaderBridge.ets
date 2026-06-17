@@ -43,7 +43,7 @@ export class ReaderBridge implements MethodCallHandler {
     }
     let params: ReaderOpenParams = this.extractOpenParams(call.args);
     let want: Want = {
-      bundleName: 'com.twopuding.veneraoh',
+      bundleName: 'com.venera.ohos',
       abilityName: 'ReaderAbility',
       parameters: {
         comicId: params.comicId,
