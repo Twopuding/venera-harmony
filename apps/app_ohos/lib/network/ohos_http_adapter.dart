@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
+import 'package:venera/foundation/appdata.dart';
+import 'package:venera/network/proxy.dart';
 
 class OhosHttpClientAdapter implements HttpClientAdapter {
   @override
@@ -19,14 +21,19 @@ class OhosHttpClientAdapter implements HttpClientAdapter {
       options.headers['User-Agent'] = 'venera/ohos';
     }
 
-    var proxy = await _getProxy();
+    var uri = options.uri;
+    var proxy = await _getProxy(uri);
 
     var client = HttpClient();
     client.connectionTimeout = const Duration(seconds: 15);
     client.idleTimeout = const Duration(seconds: 60);
 
+    if (appdata.settings['ignoreBadCertificate'] == true) {
+      client.badCertificateCallback = (_, __, ___) => true;
+    }
+
     if (proxy != null) {
-      client.findProxy = (uri) => 'PROXY $proxy';
+      client.findProxy = (_) => 'PROXY $proxy';
     }
 
     var request = await _buildRequest(client, options, requestStream);
@@ -124,24 +131,37 @@ class OhosHttpClientAdapter implements HttpClientAdapter {
     return parts.join('&');
   }
 
-  Future<String?> _getProxy() async {
-    const channel = MethodChannel('venera/method_channel');
-    try {
-      var res = await channel.invokeMethod<String>('getProxy');
-      if (res == null || res == 'No Proxy') return null;
-      if (res.contains(';')) {
-        for (var proxy in res.split(';')) {
-          proxy = proxy.trim();
-          if (proxy.startsWith('https=')) {
-            return proxy.substring(6);
+  Future<String?> _getProxy(Uri uri) async {
+    if ((appdata.settings['proxy'] as String).trim() == 'system') {
+      const channel = MethodChannel('venera/method_channel');
+      try {
+        var res = await channel.invokeMethod<String>('getProxy');
+        if (res == null || res == 'No Proxy') return null;
+        if (res.contains(';')) {
+          final prefix = uri.scheme == 'https' ? 'https=' : 'http=';
+          for (var proxy in res.split(';')) {
+            proxy = proxy.trim();
+            if (proxy.startsWith(prefix)) {
+              return proxy.substring(prefix.length);
+            }
+          }
+          for (var proxy in res.split(';')) {
+            proxy = proxy.trim();
+            if (proxy.startsWith('https=')) {
+              return proxy.substring(6);
+            }
+            if (proxy.startsWith('http=')) {
+              return proxy.substring(5);
+            }
           }
         }
+        var regex = RegExp(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+$');
+        if (!regex.hasMatch(res.trim())) return null;
+        return res.trim();
+      } catch (_) {
+        return null;
       }
-      var regex = RegExp(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+$');
-      if (!regex.hasMatch(res.trim())) return null;
-      return res.trim();
-    } catch (_) {
-      return null;
     }
+    return getProxy();
   }
 }
