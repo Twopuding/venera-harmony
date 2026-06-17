@@ -26,7 +26,7 @@ struct ReaderPage {
     this.viewModel.currentChapter = this.initialEp;
     this.viewModel.currentPage = this.initialPage;
     this.viewModel.readerMode = this.viewModel.settings.readerMode;
-    this.viewModel.loadChapterImages();
+    this.viewModel.loadComicData();
     this.updateClock();
     setInterval(() => {
       this.updateClock();

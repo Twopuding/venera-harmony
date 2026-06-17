@@ -13,6 +13,7 @@ import 'components/components.dart';
 import 'components/window_frame.dart';
 import 'foundation/app.dart';
 import 'foundation/appdata.dart';
+import 'bridge/native_ui_bootstrap.dart';
 import 'headless.dart';
 import 'init.dart';
 
@@ -25,6 +26,11 @@ void main(List<String> args) {
     runZonedGuarded(() async {
       WidgetsFlutterBinding.ensureInitialized();
       await init();
+      if (App.isOhos && appdata.settings['useNativeUi'] == true) {
+        await NativeUiBootstrap.start();
+        runApp(const SizedBox.shrink());
+        return;
+      }
       runApp(const MyApp());
       if (App.isDesktop) {
         await windowManager.ensureInitialized();

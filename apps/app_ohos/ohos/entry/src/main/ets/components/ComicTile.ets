@@ -1,4 +1,5 @@
 import { Comic } from '../model/Comic'
+import { HdsTheme } from '../design/HdsTheme'
 
 @Component
 export struct ComicTile {
@@ -49,7 +50,7 @@ export struct ComicTile {
     }
     .width('100%')
     .borderRadius(8)
-    .backgroundColor($r('app.color.card_background'))
+    .backgroundBlurStyle(HdsTheme.thickBlurStyle())
     .shadow({ radius: 4, color: $r('app.color.shadow_light'), offsetY: 1 })
     .onClick(() => {
       if (this.onTap !== null) {
@@ -134,7 +135,7 @@ export struct ComicTile {
     .width('100%')
     .padding(8)
     .borderRadius(12)
-    .backgroundBlurStyle(BlurStyle.COMPONENT_THIN)
+    .backgroundBlurStyle(HdsTheme.cardBlurStyle())
     .border({ width: 0.5, color: $r('app.color.card_border') })
     .onClick(() => {
       if (this.onTap !== null) {

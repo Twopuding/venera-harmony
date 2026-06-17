@@ -223,6 +223,7 @@ class Settings with ChangeNotifier {
     'preloadImageCount': 4,
     'followUpdatesFolder': null,
     'initialPage': '0',
+    'useNativeUi': false,
     'comicListDisplayMode': 'paging', // paging, continuous
     'showPageNumberInReader': true,
     'showSingleImageOnFirstPage': false,

@@ -1,3 +1,5 @@
+import { HdsTheme } from '../design/HdsTheme'
+
 @Component
 export struct SearchBar {
   @Prop placeholder: string = 'Search'
@@ -20,7 +22,7 @@ export struct SearchBar {
     .height(48)
     .padding({ left: 20, right: 20 })
     .borderRadius(28)
-    .backgroundBlurStyle(BlurStyle.COMPONENT_THICK)
+    .backgroundBlurStyle(HdsTheme.thickBlurStyle())
     .border({ width: 0.5, color: $r('app.color.card_border') })
     .onClick(() => {
       if (this.onTap !== null) {

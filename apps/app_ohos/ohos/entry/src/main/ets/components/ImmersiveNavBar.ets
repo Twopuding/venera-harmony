@@ -1,3 +1,5 @@
+import { HdsTheme } from '../design/HdsTheme'
+
 @Component
 export struct ImmersiveNavBar {
   @Prop title: string = ''
@@ -30,7 +32,7 @@ export struct ImmersiveNavBar {
     .width('100%')
     .height(56)
     .padding({ left: 16, right: 16 })
-    .backgroundBlurStyle(BlurStyle.COMPONENT_ULTRA_THICK)
+    .backgroundBlurStyle(HdsTheme.cardBlurStyle())
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
   }
 }

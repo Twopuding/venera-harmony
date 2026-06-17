@@ -8,8 +8,16 @@ const TAG: string = 'ReaderBridge';
 const DOMAIN: number = 0x0000;
 
 export class ReaderBridge implements MethodCallHandler {
+  private static instance: ReaderBridge | null = null;
   private bridge: FlutterBridge = FlutterBridge.getInstance();
   private context: UIAbility | null = null;
+
+  static getInstance(): ReaderBridge {
+    if (ReaderBridge.instance === null) {
+      ReaderBridge.instance = new ReaderBridge();
+    }
+    return ReaderBridge.instance;
+  }
 
   setContext(context: UIAbility): void {
     this.context = context;
@@ -65,15 +73,17 @@ export class ReaderBridge implements MethodCallHandler {
     }
     try {
       let jsonStr: string = JSON.stringify(args);
-      let parsed: ReaderOpenParams = JSON.parse(jsonStr);
+      let parsed: ReaderOpenParamsJson = JSON.parse(jsonStr);
       if (parsed.comicId !== undefined && parsed.comicId !== null) {
         result.comicId = parsed.comicId;
+      } else if (parsed.id !== undefined && parsed.id !== null) {
+        result.comicId = parsed.id;
       }
       if (parsed.sourceKey !== undefined && parsed.sourceKey !== null) {
         result.sourceKey = parsed.sourceKey;
       }
       if (parsed.initialEp !== undefined && parsed.initialEp !== null) {
-        result.initialEp = parsed.initialEp;
+        result.initialEp = parsed.initialEp.toString();
       }
       if (parsed.initialPage !== undefined && parsed.initialPage !== null) {
         result.initialPage = parsed.initialPage;
@@ -84,41 +94,50 @@ export class ReaderBridge implements MethodCallHandler {
     return result;
   }
 
-  loadData(comicId: string, sourceKey: string): void {
+  onLoadData(comicId: string, sourceKey: string): Promise<Object | null> {
     let params: ReaderLoadDataParams = {
-      comicId: comicId,
+      id: comicId,
       sourceKey: sourceKey
     };
-    this.bridge.invokeMethod(CHANNEL_NAME, 'loadData', params);
+    return this.bridge.invokeMethodAsync(CHANNEL_NAME, 'onLoadData', params);
   }
 
-  loadChapterImages(comicId: string, sourceKey: string, chapterId: string): void {
+  onLoadChapterImages(
+    comicId: string,
+    sourceKey: string,
+    chapterId: string,
+    chapterIndex: number
+  ): Promise<Object | null> {
     let params: ReaderChapterParams = {
       comicId: comicId,
       sourceKey: sourceKey,
-      chapterId: chapterId
+      chapterId: chapterId,
+      chapterIndex: chapterIndex
     };
-    this.bridge.invokeMethod(CHANNEL_NAME, 'loadChapterImages', params);
+    return this.bridge.invokeMethodAsync(CHANNEL_NAME, 'onLoadChapterImages', params);
   }
 
-  loadImage(url: string): void {
-    let params: ReaderImageUrlParams = {
-      imageUrl: url
-    };
-    this.bridge.invokeMethod(CHANNEL_NAME, 'loadImage', params);
-  }
-
-  updateHistory(comicId: string, ep: string, page: number): void {
-    let params: ReaderHistoryParams = {
-      comicId: comicId,
+  onLoadImage(key: string, ep: number, page: number): Promise<Object | null> {
+    let params: ReaderImageParams = {
+      key: key,
       ep: ep,
       page: page
     };
-    this.bridge.invokeMethod(CHANNEL_NAME, 'updateHistory', params);
+    return this.bridge.invokeMethodAsync(CHANNEL_NAME, 'onLoadImage', params);
   }
 
-  getSettings(): void {
-    this.bridge.invokeMethod(CHANNEL_NAME, 'getSettings', null);
+  onUpdateHistory(comicId: string, sourceKey: string, ep: number, page: number): void {
+    let params: ReaderHistoryParams = {
+      comicId: comicId,
+      sourceKey: sourceKey,
+      ep: ep,
+      page: page
+    };
+    this.bridge.invokeMethod(CHANNEL_NAME, 'onUpdateHistory', params);
+  }
+
+  onGetSettings(): Promise<Object | null> {
+    return this.bridge.invokeMethodAsync(CHANNEL_NAME, 'onGetSettings', null);
   }
 }
 
@@ -129,8 +148,16 @@ interface ReaderOpenParams {
   initialPage: number;
 }
 
+interface ReaderOpenParamsJson {
+  comicId?: string;
+  id?: string;
+  sourceKey?: string;
+  initialEp?: string | number;
+  initialPage?: number;
+}
+
 interface ReaderLoadDataParams {
-  comicId: string;
+  id: string;
   sourceKey: string;
 }
 
@@ -138,14 +165,18 @@ interface ReaderChapterParams {
   comicId: string;
   sourceKey: string;
   chapterId: string;
+  chapterIndex: number;
 }
 
-interface ReaderImageUrlParams {
-  imageUrl: string;
+interface ReaderImageParams {
+  key: string;
+  ep: number;
+  page: number;
 }
 
 interface ReaderHistoryParams {
   comicId: string;
-  ep: string;
+  sourceKey: string;
+  ep: number;
   page: number;
 }

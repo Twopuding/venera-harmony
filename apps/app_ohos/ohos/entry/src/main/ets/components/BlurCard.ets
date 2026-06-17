@@ -1,6 +1,8 @@
+import { HdsTheme } from '../design/HdsTheme'
+
 @Component
 export struct BlurCard {
-  @Prop blurStyle: number = BlurStyle.COMPONENT_ULTRA_THICK
+  @Prop useThickBlur: boolean = false
   @Prop cardRadius: number = 16
   @Prop cardPadding: number = 16
   @Prop cardBorderColor: ResourceColor = $r('app.color.card_border')
@@ -14,7 +16,7 @@ export struct BlurCard {
     .width('100%')
     .borderRadius(this.cardRadius)
     .padding(this.cardPadding)
-    .backgroundBlurStyle(this.blurStyle)
+    .backgroundBlurStyle(this.useThickBlur ? HdsTheme.thickBlurStyle() : HdsTheme.cardBlurStyle())
     .border({ width: this.cardBorderWidth, color: this.cardBorderColor })
     .shadow({ radius: 8, color: $r('app.color.shadow_light'), offsetY: 2 })
   }

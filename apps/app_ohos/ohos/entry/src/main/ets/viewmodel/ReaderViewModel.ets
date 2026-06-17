@@ -1,4 +1,5 @@
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { ReaderBridge } from '../bridge/ReaderBridge';
 
 export enum ReaderMode {
   GALLERY_LR = 0,
@@ -37,6 +38,7 @@ export class ReaderViewModel {
   images: string[] = [];
   settings: ReaderSettings = { readerMode: ReaderMode.GALLERY_LR, landscape: false };
   private historyTimer: number = -1;
+  private bridge: ReaderBridge = ReaderBridge.getInstance();
 
   isGalleryMode(): boolean {
     return this.readerMode === ReaderMode.GALLERY_LR ||
@@ -105,10 +107,66 @@ export class ReaderViewModel {
     this.isToolbarOpen = !this.isToolbarOpen;
   }
 
-  loadChapterImages(): void {
+  async loadComicData(): Promise<void> {
+    if (this.comicId.length === 0 || this.sourceKey.length === 0) {
+      return;
+    }
     this.isLoading = true;
-    const chapterId: string = this.chapters[this.currentChapter].id;
-    hilog.info(0x0000, 'ReaderVM', 'Loading chapter: ' + chapterId);
+    try {
+      let raw: Object | null = await this.bridge.onLoadData(this.comicId, this.sourceKey);
+      if (raw === null) {
+        return;
+      }
+      let jsonStr: string = JSON.stringify(raw);
+      let parsed: ReaderLoadDataResult = JSON.parse(jsonStr);
+      if (parsed.error !== undefined && parsed.error !== null) {
+        hilog.error(0x0000, 'ReaderVM', 'Load data error: ' + parsed.error);
+        return;
+      }
+      this.comicName = parsed.comicName ?? '';
+      this.author = parsed.author ?? '';
+      this.tags = parsed.tags ?? '';
+      this.chapters = parsed.chapters ?? [];
+      if (this.chapters.length > 0) {
+        await this.loadChapterImages();
+      }
+    } catch (e) {
+      hilog.error(0x0000, 'ReaderVM', 'Failed to load comic data');
+    } finally {
+      this.isLoading = false;
+    }
+  }
+
+  async loadChapterImages(): Promise<void> {
+    if (this.chapters.length === 0) {
+      return;
+    }
+    this.isLoading = true;
+    const chapter: ChapterInfo = this.chapters[this.currentChapter];
+    hilog.info(0x0000, 'ReaderVM', 'Loading chapter: ' + chapter.id);
+    try {
+      let raw: Object | null = await this.bridge.onLoadChapterImages(
+        this.comicId,
+        this.sourceKey,
+        chapter.id,
+        this.currentChapter + 1
+      );
+      if (raw === null) {
+        this.onImagesLoaded([]);
+        return;
+      }
+      let jsonStr: string = JSON.stringify(raw);
+      let parsed: ReaderChapterImagesResult = JSON.parse(jsonStr);
+      if (parsed.error !== undefined && parsed.error !== null) {
+        hilog.error(0x0000, 'ReaderVM', 'Chapter images error: ' + parsed.error);
+        this.onImagesLoaded([]);
+        return;
+      }
+      this.onImagesLoaded(parsed.images ?? []);
+    } catch (e) {
+      hilog.error(0x0000, 'ReaderVM', 'Failed to load chapter images');
+      this.onImagesLoaded([]);
+    }
   }
 
   onImagesLoaded(imageUrls: string[]): void {
@@ -135,10 +193,16 @@ export class ReaderViewModel {
   }
 
   updateHistory(): void {
+    this.bridge.onUpdateHistory(
+      this.comicId,
+      this.sourceKey,
+      this.currentChapter + 1,
+      this.currentPage + 1
+    );
     hilog.info(0x0000, 'ReaderVM',
       'Update history: comic=' + this.comicId +
-      ' chapter=' + this.currentChapter.toString() +
-      ' page=' + this.currentPage.toString());
+      ' chapter=' + (this.currentChapter + 1).toString() +
+      ' page=' + (this.currentPage + 1).toString());
   }
 
   cancelHistoryTimer(): void {
@@ -158,4 +222,17 @@ export class ReaderViewModel {
   getPageIndicator(): string {
     return (this.currentPage + 1).toString() + ' / ' + this.totalPages.toString();
   }
+}
+
+interface ReaderLoadDataResult {
+  comicName?: string;
+  author?: string;
+  tags?: string;
+  chapters?: ChapterInfo[];
+  error?: string;
+}
+
+interface ReaderChapterImagesResult {
+  images?: string[];
+  error?: string;
 }

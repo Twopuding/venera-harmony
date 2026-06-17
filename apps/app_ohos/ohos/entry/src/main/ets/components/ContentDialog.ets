@@ -1,3 +1,5 @@
+import { HdsTheme } from '../design/HdsTheme'
+
 @Component
 export struct ContentDialog {
   @Prop title: string = ''
@@ -37,7 +39,7 @@ export struct ContentDialog {
         .width('90%')
         .maxHeight('80%')
         .borderRadius(24)
-        .backgroundBlurStyle(BlurStyle.COMPONENT_ULTRA_THICK)
+        .backgroundBlurStyle(HdsTheme.cardBlurStyle())
         .border({ width: 0.5, color: $r('app.color.card_border') })
         .shadow({ radius: 20, color: $r('app.color.overlay_background') })
       }
