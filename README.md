@@ -2,6 +2,8 @@
 
 [Venera](https://github.com/venera-app/venera) 漫画阅读器的 HarmonyOS 移植版。`HDS_UI` 分支正在将 UI 全量 1:1 迁移至 ArkTS/ArkUI（HarmonyOS 6.1 API 23 沉浸光感材质），同时保留 Flutter 数据层（QuickJS 漫画源、SQLite、Dio、Manager 单例）。
 
+**应用标识**：`bundleName` 为 `com.venera.ohos`，版本 `1.0.0`（见 [`app.json5`](apps/app_ohos/ohos/AppScope/app.json5)）。
+
 ## 功能特性
 
 - 多源漫画浏览与搜索
@@ -167,7 +169,7 @@ flutter pub get
 1. 用 DevEco Studio 打开 `apps/app_ohos/ohos/`
 2. **File → Project Structure → Signing Configs**
 3. 勾选 **Automatically generate signature**
-4. 确认 bundleName 为 `com.twopuding.veneraoh`
+4. 确认 bundleName 为 `com.venera.ohos`
 5. Apply → OK
 
 ### 4. 构建 HAP
@@ -209,7 +211,7 @@ venera-harmony/
 │       ├── stubs/                 # 8 个桩插件包
 │       └── ohos/                  # HarmonyOS 工程
 │           ├── AppScope/
-│           │   ├── app.json5      # bundleName: com.twopuding.veneraoh
+│           │   ├── app.json5      # bundleName: com.venera.ohos
 │           │   └── resources/
 │           ├── entry/
 │           │   ├── libs/          # 预编译 .so (arm64-v8a, x86_64)
