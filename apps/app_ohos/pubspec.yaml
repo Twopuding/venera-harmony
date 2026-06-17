@@ -47,7 +47,9 @@ dependencies:
   flutter_memory_info:
     path: stubs/flutter_memory_info
   webdav_client:
-    path: stubs/webdav_client
+    git:
+      url: https://github.com/venera-app/webdav_client
+      ref: 2f669c98fb81cff1c64fee93466a1475c77e4273
 
 dev_dependencies:
   flutter_test:

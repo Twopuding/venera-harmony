@@ -457,10 +457,12 @@ packages:
   webdav_client:
     dependency: "direct main"
     description:
-      path: "stubs/webdav_client"
-      relative: true
-    source: path
-    version: "0.0.1"
+      path: "."
+      ref: "2f669c98fb81cff1c64fee93466a1475c77e4273"
+      resolved-ref: "2f669c98fb81cff1c64fee93466a1475c77e4273"
+      url: "https://github.com/venera-app/webdav_client"
+    source: git
+    version: "1.2.2"
   window_manager:
     dependency: "direct main"
     description:
