@@ -398,6 +398,9 @@ class ImageFavoriteManager with ChangeNotifier {
     if (count == 0) {
       return Future.value(ImageFavoritesComputed([], [], [], 0));
     } else if (count > 100) {
+      if (App.isOhos) {
+        return Future.value(_computeImageFavorites());
+      }
       return Isolate.run(() async {
         BackgroundIsolateBinaryMessenger.ensureInitialized(token);
         await App.init();

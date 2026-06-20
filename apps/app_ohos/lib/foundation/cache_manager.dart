@@ -23,33 +23,38 @@ class CacheManager {
 
   int _limitSize = 2 * 1024 * 1024 * 1024;
 
-  static Future<int> _scanDir(Pointer<void> dbP, String dir) async {
-    var res = await Isolate.run(() async {
-      int totalSize = 0;
-      List<String> unmanagedFiles = [];
-      var db = sqlite3.fromPointer(dbP);
-      await for (var file in Directory(dir).list(recursive: true)) {
-        if (file is File) {
-          var size = await file.length();
-          var segments = file.uri.pathSegments;
-          var name = segments.last;
-          var dir = segments.elementAtOrNull(segments.length - 2) ?? "*";
-          var res = db.select('''
+  static Future<Map<String, dynamic>> _scanDirWork(
+      Pointer<void> dbP, String dir) async {
+    int totalSize = 0;
+    List<String> unmanagedFiles = [];
+    var db = sqlite3.fromPointer(dbP);
+    await for (var file in Directory(dir).list(recursive: true)) {
+      if (file is File) {
+        var size = await file.length();
+        var segments = file.uri.pathSegments;
+        var name = segments.last;
+        var dir = segments.elementAtOrNull(segments.length - 2) ?? "*";
+        var res = db.select('''
             SELECT * FROM cache
             WHERE dir = ? AND name = ?
           ''', [dir, name]);
-          if (res.isEmpty) {
-            unmanagedFiles.add(file.path);
-          } else {
-            totalSize += size;
-          }
+        if (res.isEmpty) {
+          unmanagedFiles.add(file.path);
+        } else {
+          totalSize += size;
         }
       }
-      return {
-        'totalSize': totalSize,
-        'unmanagedFiles': unmanagedFiles,
-      };
-    });
+    }
+    return {
+      'totalSize': totalSize,
+      'unmanagedFiles': unmanagedFiles,
+    };
+  }
+
+  static Future<int> _scanDir(Pointer<void> dbP, String dir) async {
+    var res = App.isOhos
+        ? await _scanDirWork(dbP, dir)
+        : await Isolate.run(() => _scanDirWork(dbP, dir));
     // delete unmanaged files
     // Only modify the database in the main isolate to avoid deadlock
     for (var filePath in res['unmanagedFiles'] as List<String>) {

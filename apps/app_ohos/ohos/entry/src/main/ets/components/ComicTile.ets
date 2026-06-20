@@ -1,31 +1,70 @@
 import { Comic } from '../model/Comic'
 import { HdsTheme } from '../design/HdsTheme'
+import { ComicCoverImage } from './ComicCoverImage'
+import { DisplaySettings } from '../utils/DisplaySettings'
+import { ComicHistoryStatus } from '../service/DataService'
 
 @Component
 export struct ComicTile {
   @Prop comic: Comic = new Comic()
   @Prop mode: string = 'brief'
   @Prop badge: string = ''
+  @Prop tileScale: number = 1
+  @Prop isFavorite: boolean = false
+  @Prop historyStatus: ComicHistoryStatus | null = null
+  @Prop enableHero: boolean = true
   onTap: (() => void) | null = null
   onLongPress: (() => void) | null = null
 
   build() {
-    if (this.mode === 'detailed') {
-      this._buildDetailedMode()
-    } else {
-      this._buildBriefMode()
+    Stack() {
+      if (this.mode === 'detailed') {
+        this._buildDetailedMode()
+      } else {
+        this._buildBriefMode()
+      }
+      if (this.isFavorite || this.historyStatus !== null) {
+        Row() {
+          if (this.isFavorite) {
+            SymbolGlyph($r('sys.symbol.bookmark_fill'))
+              .fontSize(14)
+              .fontColor([Color.White])
+              .width(24)
+              .height(24)
+              .backgroundColor('#4CAF50')
+              .borderRadius(4)
+          }
+          if (this.historyStatus !== null) {
+            Text(`${this.historyStatus.ep}-${this.historyStatus.page}`)
+              .fontSize(10)
+              .fontColor(Color.White)
+              .padding({ left: 4, right: 4, top: 2, bottom: 2 })
+              .backgroundColor('#2196F3')
+              .borderRadius(4)
+              .margin({ left: this.isFavorite ? 4 : 0 })
+          }
+        }
+        .position({ x: this.mode === 'detailed' ? 16 : 6, y: 8 })
+      }
     }
+    .width('100%')
+    .scale({ x: this.tileScale, y: this.tileScale })
   }
 
   @Builder
   _buildBriefMode() {
     Column() {
       Stack() {
-        Column() {}
+        ComicCoverImage({
+          coverUrl: this.comic.cover,
+          sourceKey: this.comic.sourceKey,
+          comicId: this.comic.id,
+          coverRadius: 8
+        })
           .width('100%')
           .aspectRatio(0.64)
-          .borderRadius({ topLeft: 8, topRight: 8 })
-          .backgroundColor($r('app.color.placeholder_bg'))
+          .sharedTransition(this.enableHero ? `${this.comic.sourceKey}:${this.comic.id}` : '',
+            { duration: 300, curve: Curve.EaseInOut })
 
         if (this.badge.length > 0) {
           Text(this.badge.charAt(0).toUpperCase() + this.badge.substring(1).toLowerCase())
@@ -70,11 +109,14 @@ export struct ComicTile {
   @Builder
   _buildDetailedMode() {
     Row() {
-      Column() {}
+      ComicCoverImage({
+        coverUrl: this.comic.cover,
+        sourceKey: this.comic.sourceKey,
+        comicId: this.comic.id,
+        coverRadius: 8
+      })
         .width(80)
         .height(112)
-        .borderRadius(8)
-        .backgroundColor($r('app.color.placeholder_bg'))
         .flexShrink(0)
 
       Column() {

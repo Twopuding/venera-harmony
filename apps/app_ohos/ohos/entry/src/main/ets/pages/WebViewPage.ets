@@ -1,8 +1,10 @@
 import { webview } from '@kit.ArkWeb';
+import router from '@ohos.router';
 import { WebViewBridge } from '../bridge/WebViewBridge';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { BusinessError } from '@kit.BasicServicesKit';
 import { common } from '@kit.AbilityKit';
+import { LoadingIndicator } from '../components/LoadingIndicator';
+import { AuthSessionGuard } from '../utils/AuthSessionGuard';
 
 const TAG: string = 'WebViewPage';
 const DOMAIN: number = 0x0000;
@@ -10,25 +12,50 @@ const CF_CLEARANCE: string = 'cf_clearance';
 const CF_CHALLENGE: string = 'cf-chl-bypass';
 const STORAGE_KEY_URL: string = 'webview_target_url';
 
+interface WebViewRouteParams {
+  url?: string;
+}
+
 @Entry
 @Component
 struct WebViewPage {
-  @State currentUrl: string = '';
+  @State pageUrl: string = '';
   @State title: string = '';
   @State isLoading: boolean = false;
   @State canGoBack: boolean = false;
   @State canGoForward: boolean = false;
-  @StorageLink(STORAGE_KEY_URL) initialUrl: string = '';
+  @State openedViaRouter: boolean = false;
+  @State authBlocked: boolean = false;
   private controller: webview.WebviewController = new webview.WebviewController();
-  private bridge: WebViewBridge = new WebViewBridge();
+  private bridge: WebViewBridge = WebViewBridge.getInstance();
 
   aboutToAppear(): void {
-    this.currentUrl = this.initialUrl;
+    this.authBlocked = AuthSessionGuard.shouldBlock();
+    if (this.authBlocked) {
+      AuthSessionGuard.redirectIfNeeded();
+      return;
+    }
+    let params = router.getParams() as WebViewRouteParams;
+    if (params?.url !== undefined && params.url.length > 0) {
+      this.pageUrl = params.url;
+      this.openedViaRouter = true;
+    } else {
+      let stored: string | undefined = AppStorage.get<string>(STORAGE_KEY_URL);
+      this.pageUrl = stored !== undefined ? stored : '';
+    }
     webview.WebviewController.setWebDebuggingAccess(true);
-    hilog.info(DOMAIN, TAG, 'WebViewPage aboutToAppear, url: ' + this.initialUrl);
+    this.bridge.registerSession(this.controller, this.pageUrl, () => this.onClose());
+    hilog.info(DOMAIN, TAG, 'WebViewPage aboutToAppear, url: ' + this.pageUrl);
+  }
+
+  aboutToDisappear(): void {
+    this.bridge.unregisterSession();
   }
 
   build() {
+    if (this.authBlocked) {
+      LoadingIndicator()
+    } else {
     Column() {
       Row() {
         Image($r('sys.media.ohos_ic_public_arrow_left'))
@@ -76,7 +103,7 @@ struct WebViewPage {
       .backgroundColor('#80000000')
 
       Stack() {
-        Web({ src: this.initialUrl, controller: this.controller })
+        Web({ src: this.pageUrl, controller: this.controller })
           .width('100%')
           .height('100%')
           .javaScriptAccess(true)
@@ -84,7 +111,8 @@ struct WebViewPage {
           .cacheMode(CacheMode.Default)
           .onPageBegin((event) => {
             if (event !== null && event.url !== undefined) {
-              this.currentUrl = event.url;
+              this.pageUrl = event.url;
+              this.bridge.updateUrl(event.url);
               this.isLoading = true;
               this.updateNavigationState();
               hilog.info(DOMAIN, TAG, 'Page begin: ' + event.url);
@@ -121,6 +149,7 @@ struct WebViewPage {
     }
     .width('100%')
     .height('100%')
+    }
   }
 
   private updateNavigationState(): void {
@@ -141,6 +170,10 @@ struct WebViewPage {
   }
 
   private onClose(): void {
+    if (this.openedViaRouter) {
+      router.back();
+      return;
+    }
     let context: common.UIAbilityContext = this.getUIContext().getHostContext() as common.UIAbilityContext;
     context.terminateSelf();
   }

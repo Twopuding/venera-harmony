@@ -11,11 +11,22 @@ import 'package:venera/utils/io.dart';
 import 'package:window_manager/window_manager.dart';
 import 'components/components.dart';
 import 'components/window_frame.dart';
+import 'bridge/data_bridge.dart';
 import 'foundation/app.dart';
 import 'foundation/appdata.dart';
 import 'bridge/native_ui_bootstrap.dart';
 import 'headless.dart';
 import 'init.dart';
+
+Future<void> _bootstrapOhosBridge() async {
+  await appdata.init();
+  if (appdata.settings['useNativeUi'] == false) {
+    appdata.settings['useNativeUi'] = true;
+    await appdata.saveData(false);
+  }
+  DataBridge.registerHandlers();
+  installDataBridgeSettingsListener();
+}
 
 void main(List<String> args) {
   if (args.contains('--headless')) {
@@ -25,10 +36,18 @@ void main(List<String> args) {
   overrideIO(() {
     runZonedGuarded(() async {
       WidgetsFlutterBinding.ensureInitialized();
+      await App.init();
+      if (App.isOhos) {
+        await _bootstrapOhosBridge();
+      }
       await init();
-      if (App.isOhos && appdata.settings['useNativeUi'] == true) {
-        await NativeUiBootstrap.start();
-        runApp(const SizedBox.shrink());
+      if (App.isOhos && appdata.settings['useNativeUi'] != false) {
+        await NativeUiBootstrap.registerWebViewHandlers();
+        await NativeUiBootstrap.registerReaderHandlers();
+        runApp(const Material(
+          color: Colors.transparent,
+          child: SizedBox.shrink(),
+        ));
         return;
       }
       runApp(const MyApp());

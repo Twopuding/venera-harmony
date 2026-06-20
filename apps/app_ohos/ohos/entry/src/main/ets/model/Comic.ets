@@ -10,6 +10,8 @@ export class Comic {
   language: string = ''
   favoriteId: string = ''
   stars: number = 0
+  hasNewUpdate: boolean = false
+  updateTime: string = ''
 }
 
 export class ComicDetails extends Comic {

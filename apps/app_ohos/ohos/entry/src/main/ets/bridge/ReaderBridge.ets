@@ -117,12 +117,28 @@ export class ReaderBridge implements MethodCallHandler {
     return this.bridge.invokeMethodAsync(CHANNEL_NAME, 'onLoadChapterImages', params);
   }
 
-  onLoadImage(key: string, ep: number, page: number): Promise<Object | null> {
+  onLoadImage(
+    key: string,
+    ep: number,
+    page: number,
+    sourceKey?: string,
+    comicId?: string,
+    chapterId?: string
+  ): Promise<Object | null> {
     let params: ReaderImageParams = {
       key: key,
       ep: ep,
       page: page
     };
+    if (sourceKey !== undefined && sourceKey.length > 0) {
+      params.sourceKey = sourceKey;
+    }
+    if (comicId !== undefined && comicId.length > 0) {
+      params.comicId = comicId;
+    }
+    if (chapterId !== undefined && chapterId.length > 0) {
+      params.chapterId = chapterId;
+    }
     return this.bridge.invokeMethodAsync(CHANNEL_NAME, 'onLoadImage', params);
   }
 
@@ -136,8 +152,46 @@ export class ReaderBridge implements MethodCallHandler {
     this.bridge.invokeMethod(CHANNEL_NAME, 'onUpdateHistory', params);
   }
 
-  onGetSettings(): Promise<Object | null> {
-    return this.bridge.invokeMethodAsync(CHANNEL_NAME, 'onGetSettings', null);
+  onGetSettings(comicId: string, sourceKey: string): Promise<Object | null> {
+    let params: ReaderSettingsParams = {
+      comicId: comicId,
+      sourceKey: sourceKey
+    };
+    return this.bridge.invokeMethodAsync(CHANNEL_NAME, 'onGetSettings', params);
+  }
+
+  onRead(comicId: string, sourceKey: string): void {
+    let params: ReaderReadParams = {
+      id: comicId,
+      sourceKey: sourceKey
+    };
+    this.bridge.invokeMethod(CHANNEL_NAME, 'onRead', params);
+  }
+
+  onClosed(): void {
+    this.bridge.invokeMethod(CHANNEL_NAME, 'onClosed', null);
+  }
+
+  openReader(params: ReaderOpenNativeParams): void {
+    if (this.context === null) {
+      hilog.error(DOMAIN, TAG, 'Context is null, cannot launch ReaderAbility');
+      return;
+    }
+    let want: Want = {
+      bundleName: 'com.venera.ohos',
+      abilityName: 'ReaderAbility',
+      parameters: {
+        comicId: params.id,
+        sourceKey: params.sourceKey,
+        initialEp: params.initialEp,
+        initialPage: params.initialPage
+      }
+    };
+    this.context.context.startAbility(want).then(() => {
+      hilog.info(DOMAIN, TAG, 'ReaderAbility started from native UI');
+    }).catch((err: Error) => {
+      hilog.error(DOMAIN, TAG, 'Failed to start ReaderAbility: ' + err.message);
+    });
   }
 }
 
@@ -172,6 +226,9 @@ interface ReaderImageParams {
   key: string;
   ep: number;
   page: number;
+  sourceKey?: string;
+  comicId?: string;
+  chapterId?: string;
 }
 
 interface ReaderHistoryParams {
@@ -179,4 +236,21 @@ interface ReaderHistoryParams {
   sourceKey: string;
   ep: number;
   page: number;
+}
+
+interface ReaderOpenNativeParams {
+  id: string;
+  sourceKey: string;
+  initialEp: string;
+  initialPage: number;
+}
+
+interface ReaderReadParams {
+  id: string;
+  sourceKey: string;
+}
+
+interface ReaderSettingsParams {
+  comicId: string;
+  sourceKey: string;
 }

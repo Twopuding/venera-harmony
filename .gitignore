@@ -16,6 +16,7 @@ Thumbs.db
 *.ipr
 *.iws
 .vscode/
+.cursor/
 
 # ===== Flutter/Dart =====
 .dart_tool/
@@ -29,6 +30,10 @@ app.*.map.json
 
 # ===== Build outputs =====
 build/
+
+# ===== HarmonyOS packages (never commit) =====
+**/*.hap
+**/*.app
 
 # ===== HarmonyOS =====
 **/oh_modules/

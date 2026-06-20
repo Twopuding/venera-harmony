@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/services.dart';
 
 class ReaderChannel {
@@ -34,10 +36,11 @@ class ReaderChannel {
     required Future<Map<String, dynamic>> Function(
         Map<dynamic, dynamic> args) onLoadChapterImages,
     required Future<Uint8List> Function(
-        String key, int ep, int page) onLoadImage,
+        Map<dynamic, dynamic> args) onLoadImage,
     required Future<void> Function(
         Map<dynamic, dynamic> args) onUpdateHistory,
-    required Future<Map<String, dynamic>> Function() onGetSettings,
+    required Future<Map<String, dynamic>> Function(
+        Map<dynamic, dynamic> args) onGetSettings,
     required Future<Map<String, dynamic>> Function(
         String key) onAddImageFavorite,
     required Future<void> Function(
@@ -58,16 +61,16 @@ class ReaderChannel {
           );
         case 'onLoadImage':
           final args = call.arguments as Map<dynamic, dynamic>;
-          return await onLoadImage(
-            args['key'] as String,
-            args['ep'] as int,
-            args['page'] as int,
-          );
+          return await onLoadImage(args);
         case 'onUpdateHistory':
           await onUpdateHistory(call.arguments as Map<dynamic, dynamic>);
           return null;
         case 'onGetSettings':
-          return await onGetSettings();
+          final settingsArgs = call.arguments;
+          if (settingsArgs is Map) {
+            return await onGetSettings(settingsArgs);
+          }
+          return await onGetSettings(<dynamic, dynamic>{});
         case 'onAddImageFavorite':
           final args = call.arguments as Map<dynamic, dynamic>;
           return await onAddImageFavorite(args['key'] as String);

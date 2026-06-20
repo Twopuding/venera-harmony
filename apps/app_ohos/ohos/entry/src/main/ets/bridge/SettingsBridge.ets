@@ -206,9 +206,11 @@ export class SettingsBridge implements MethodCallHandler {
     };
     try {
       let jsonStr: string = JSON.stringify(args);
-      let parsed: SetKeepScreenOnParams = JSON.parse(jsonStr);
-      if (parsed.keepScreenOn !== undefined && parsed.keepScreenOn !== null) {
-        result.keepScreenOn = parsed.keepScreenOn;
+      let parsed: Record<string, Object> = JSON.parse(jsonStr);
+      if (parsed['keepScreenOn'] !== undefined && parsed['keepScreenOn'] !== null) {
+        result.keepScreenOn = parsed['keepScreenOn'] as boolean;
+      } else if (parsed['on'] !== undefined && parsed['on'] !== null) {
+        result.keepScreenOn = parsed['on'] as boolean;
       }
     } catch (e) {
       hilog.error(DOMAIN, TAG, 'Failed to parse keepScreenOn args');
@@ -263,9 +265,11 @@ export class SettingsBridge implements MethodCallHandler {
     }
     try {
       let jsonStr: string = JSON.stringify(args);
-      let parsed: SaveFileParsedParams = JSON.parse(jsonStr);
+      let parsed: SaveFileParsedParamsJson = JSON.parse(jsonStr);
       if (parsed.srcUri !== undefined && parsed.srcUri !== null) {
         result.srcUri = parsed.srcUri;
+      } else if (parsed.sourcePath !== undefined && parsed.sourcePath !== null) {
+        result.srcUri = parsed.sourcePath;
       }
       if (parsed.fileName !== undefined && parsed.fileName !== null) {
         result.fileName = parsed.fileName;
@@ -289,4 +293,10 @@ interface SetKeepScreenOnParams {
 interface SaveFileParsedParams {
   srcUri: string;
   fileName: string;
+}
+
+interface SaveFileParsedParamsJson {
+  srcUri?: string;
+  sourcePath?: string;
+  fileName?: string;
 }

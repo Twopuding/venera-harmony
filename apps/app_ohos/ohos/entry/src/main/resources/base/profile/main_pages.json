@@ -2,6 +2,29 @@
   "src": [
     "pages/Index",
     "pages/ReaderPage",
-    "pages/WebViewPage"
+    "pages/WebViewPage",
+    "pages/search/SearchPage",
+    "pages/search/SearchResultPage",
+    "pages/search/AggregatedSearchPage",
+    "pages/comic/ComicDetailPage",
+    "pages/comic/CoverViewerPage",
+    "pages/comic/CommentsPage",
+    "pages/history/HistoryPage",
+    "pages/local/LocalComicsPage",
+    "pages/local/DownloadingPage",
+    "pages/categories/CategoryComicsPage",
+    "pages/categories/RankingPage",
+    "pages/follow_updates/FollowUpdatesPage",
+    "pages/settings/SettingsPage",
+    "pages/settings/SettingsCategoryPage",
+    "pages/settings/AboutPage",
+    "pages/settings/LogsPage",
+    "pages/ComicSourcePage",
+    "pages/ComicSourceListPage",
+    "pages/ComicSourceEditPage",
+    "pages/ComicSourceLoginPage",
+    "pages/image_favorites/ImageFavoritesPage",
+    "pages/image_favorites/ImageFavoritesPhotoPage",
+    "pages/AuthPage"
   ]
 }

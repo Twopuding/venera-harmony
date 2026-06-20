@@ -1,6 +1,8 @@
 import { UIAbility, AbilityConstant, Want } from '@kit.AbilityKit';
 import { window } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { PrivacyWindowUtil } from '../utils/PrivacyWindowUtil';
+import { AuthGatePresenter } from '../utils/AuthGatePresenter';
 
 const DOMAIN = 0x0000;
 const TAG = 'ReaderAbility';
@@ -12,6 +14,7 @@ export default class ReaderAbility extends UIAbility {
 
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     hilog.info(DOMAIN, TAG, 'ReaderAbility onCreate');
+    AuthGatePresenter.registerAbilityContext('ReaderAbility', this.context);
 
     const params = want.parameters;
     let comicId: string = '';
@@ -54,6 +57,8 @@ export default class ReaderAbility extends UIAbility {
 
     windowStage.getMainWindow().then((win: window.Window) => {
       this.win = win;
+      PrivacyWindowUtil.registerWindow(win);
+      PrivacyWindowUtil.syncFromCache();
       win.setWindowLayoutFullScreen(true).then(() => {
         hilog.info(DOMAIN, TAG, 'Set full screen success');
         const systemArea: window.AvoidArea = win.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM);
@@ -94,6 +99,7 @@ export default class ReaderAbility extends UIAbility {
 
   onDestroy(): void {
     hilog.info(DOMAIN, TAG, 'ReaderAbility onDestroy');
+    AuthGatePresenter.unregisterAbilityContext('ReaderAbility');
     this.win = null;
   }
 
@@ -102,6 +108,7 @@ export default class ReaderAbility extends UIAbility {
   }
 
   onForeground(): void {
+    AuthGatePresenter.setForegroundAbility('ReaderAbility');
     hilog.info(DOMAIN, TAG, 'ReaderAbility onForeground');
   }
 

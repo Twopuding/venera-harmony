@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:venera/platform/ohos_path_provider.dart';
@@ -28,12 +28,16 @@ class Appdata with Init {
       var json = toJson();
       var data = jsonEncode(json);
       var file = File(FilePath.join(App.dataPath, 'appdata.json'));
+      file.parent.createSync(recursive: true);
       futures.add(file.writeAsString(data));
 
-      var disableSyncFields = json["settings"]["disableSyncFields"] as String;
-      if (disableSyncFields.isNotEmpty) {
+      final disableSyncFields = json["settings"]["disableSyncFields"];
+      final disableSyncFieldsStr = disableSyncFields is String
+          ? disableSyncFields
+          : disableSyncFields?.toString() ?? "";
+      if (disableSyncFieldsStr.isNotEmpty) {
         var json4sync = jsonDecode(data);
-        List<String> customDisableSync = splitField(disableSyncFields);
+        List<String> customDisableSync = splitField(disableSyncFieldsStr);
         for (var field in customDisableSync) {
           json4sync["settings"].remove(field);
         }
@@ -223,7 +227,7 @@ class Settings with ChangeNotifier {
     'preloadImageCount': 4,
     'followUpdatesFolder': null,
     'initialPage': '0',
-    'useNativeUi': false,
+    'useNativeUi': true, // ArkTS shell; set false in settings to use Flutter UI
     'comicListDisplayMode': 'paging', // paging, continuous
     'showPageNumberInReader': true,
     'showSingleImageOnFirstPage': false,

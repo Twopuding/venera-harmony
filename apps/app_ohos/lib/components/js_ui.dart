@@ -2,8 +2,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_qjs/flutter_qjs.dart';
+import 'package:venera/bridge/js_ui_channel.dart';
 import 'package:venera/platform/ohos_platform_services.dart';
 import 'package:venera/foundation/app.dart';
+import 'package:venera/foundation/appdata.dart';
 import 'package:venera/foundation/js_engine.dart';
 
 import 'components.dart';
@@ -12,6 +14,9 @@ mixin class JsUiApi {
   final Map<int, LoadingDialogController> _loadingDialogControllers = {};
 
   dynamic handleUIMessage(Map<String, dynamic> message) {
+    if (JsUiChannel.useNativeUi) {
+      return JsUiChannel.handleUIMessage(message);
+    }
     switch (message['function']) {
       case 'showMessage':
         var m = message['message'];
@@ -25,6 +30,7 @@ mixin class JsUiApi {
         if (url.toString().isNotEmpty) {
           OhosUrlLauncher.launchUrlString(url.toString());
         }
+        return null;
       case 'showLoading':
         var onCancel = message['onCancel'];
         if (onCancel != null && onCancel is! JSInvokable) {

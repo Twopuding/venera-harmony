@@ -303,24 +303,30 @@ class LocalFavoritesManager with ChangeNotifier {
     }
   }
 
-  static Future<Map<int, int>> _initHashedIds(
+  static Map<int, int> _computeHashedIds(
       List<String> folders, Pointer<void> p) {
-    return Isolate.run(() {
-      var db = sqlite3.fromPointer(p);
-      var hashedIds = <int, int>{};
-      for (var folder in folders) {
-        var rows = db.select("""
+    var db = sqlite3.fromPointer(p);
+    var hashedIds = <int, int>{};
+    for (var folder in folders) {
+      var rows = db.select("""
           select id, type from "$folder";
         """);
-        for (var row in rows) {
-          var id = row["id"] as String;
-          var type = row["type"] as int;
-          var hash = id.hashCode ^ type;
-          hashedIds[hash] = (hashedIds[hash] ?? 0) + 1;
-        }
+      for (var row in rows) {
+        var id = row["id"] as String;
+        var type = row["type"] as int;
+        var hash = id.hashCode ^ type;
+        hashedIds[hash] = (hashedIds[hash] ?? 0) + 1;
       }
-      return hashedIds;
-    });
+    }
+    return hashedIds;
+  }
+
+  static Future<Map<int, int>> _initHashedIds(
+      List<String> folders, Pointer<void> p) {
+    if (App.isOhos) {
+      return Future.value(_computeHashedIds(folders, p));
+    }
+    return Isolate.run(() => _computeHashedIds(folders, p));
   }
 
   List<String> find(String id, ComicType type) {
@@ -422,16 +428,21 @@ class LocalFavoritesManager with ChangeNotifier {
     return rows.map((element) => FavoriteItem.fromRow(element)).toList();
   }
 
-  static Future<List<FavoriteItem>> _getFolderComicsAsync(
-      String folder, Pointer<void> p) {
-    return Isolate.run(() {
-      var db = sqlite3.fromPointer(p);
-      var rows = db.select("""
+  static List<FavoriteItem> _readFolderComics(String folder, Pointer<void> p) {
+    var db = sqlite3.fromPointer(p);
+    var rows = db.select("""
         select * from "$folder"
         ORDER BY display_order;
       """);
-      return rows.map((element) => FavoriteItem.fromRow(element)).toList();
-    });
+    return rows.map((element) => FavoriteItem.fromRow(element)).toList();
+  }
+
+  static Future<List<FavoriteItem>> _getFolderComicsAsync(
+      String folder, Pointer<void> p) {
+    if (App.isOhos) {
+      return Future.value(_readFolderComics(folder, p));
+    }
+    return Isolate.run(() => _readFolderComics(folder, p));
   }
 
   /// Start a new isolate to get the comics in the folder
@@ -450,19 +461,25 @@ class LocalFavoritesManager with ChangeNotifier {
     return res.toList();
   }
 
-  static Future<List<FavoriteItem>> _getAllComicsAsync(
+  static List<FavoriteItem> _readAllComics(
       List<String> folders, Pointer<void> p) {
-    return Isolate.run(() {
-      var db = sqlite3.fromPointer(p);
-      var res = <FavoriteItem>{};
-      for (final folder in folders) {
-        var comics = db.select("""
+    var db = sqlite3.fromPointer(p);
+    var res = <FavoriteItem>{};
+    for (final folder in folders) {
+      var comics = db.select("""
           select * from "$folder";
         """);
-        res.addAll(comics.map((element) => FavoriteItem.fromRow(element)));
-      }
-      return res.toList();
-    });
+      res.addAll(comics.map((element) => FavoriteItem.fromRow(element)));
+    }
+    return res.toList();
+  }
+
+  static Future<List<FavoriteItem>> _getAllComicsAsync(
+      List<String> folders, Pointer<void> p) {
+    if (App.isOhos) {
+      return Future.value(_readAllComics(folders, p));
+    }
+    return Isolate.run(() => _readAllComics(folders, p));
   }
 
   /// Start a new isolate to get all the comics

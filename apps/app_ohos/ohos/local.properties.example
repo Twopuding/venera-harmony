@@ -1,0 +1,17 @@
+# 复制为 local.properties 并按本机路径修改。
+# local.properties 已被 .gitignore 忽略，不会进入 Git。
+#
+# 版本 bump 流程：
+# 1. 修改 pubspec.yaml：version: <versionName>+<versionCode>（如 0.1.0+1000001）
+# 2. 同步下方 flutter.versionName / flutter.versionCode
+# 3. 同步 AppScope/app.json5、lib/foundation/app.dart 的 App.version
+# 4. devecocli build clean && devecocli run --uninstall
+# 5. hdc shell bm dump -n com.venera.ohos 确认 versionName / versionCode
+#
+# 注意：flutter-hvigor-plugin 构建时会用本文件覆盖 app.json5 的 versionName/versionCode。
+
+hwsdk.dir=C:\\Program Files\\Huawei\\DevEco Studio\\sdk
+flutter.sdk=D:\\Project\\flutter_ohos_sdk\\flutter
+
+flutter.versionName=0.1.0
+flutter.versionCode=1000001

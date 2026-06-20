@@ -30,6 +30,19 @@
             "actions": [
               "action.system.home"
             ]
+          },
+          {
+            "entities": [
+              "entity.system.default"
+            ],
+            "actions": [
+              "ohos.want.action.sendData"
+            ],
+            "uris": [
+              {
+                "type": "text/plain"
+              }
+            ]
           }
         ]
       },
@@ -69,7 +82,8 @@
     ],
     "requestPermissions": [
       {"name" :  "ohos.permission.INTERNET"},
-      {"name" :  "ohos.permission.ACCESS_BIOMETRIC"}
+      {"name" :  "ohos.permission.ACCESS_BIOMETRIC"},
+      {"name" :  "ohos.permission.PRIVACY_WINDOW"}
     ]
   }
 }

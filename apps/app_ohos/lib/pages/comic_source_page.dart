@@ -6,6 +6,7 @@ import 'package:venera/components/components.dart';
 import 'package:venera/foundation/app.dart';
 import 'package:venera/foundation/appdata.dart';
 import 'package:venera/foundation/comic_source/comic_source.dart';
+import 'package:venera/services/data_service.dart';
 import 'package:venera/foundation/log.dart';
 import 'package:venera/network/app_dio.dart';
 import 'package:venera/network/cookie_jar.dart';
@@ -160,7 +161,7 @@ class _BodyState extends State<_Body> {
         var file = File(source.filePath);
         file.delete();
         ComicSourceManager().remove(source.key);
-        _validatePages();
+        DataService.validateComicSourcePages();
         App.forceRebuild();
       },
     );
@@ -321,7 +322,7 @@ class _BodyState extends State<_Body> {
   Future<void> addSource(String js, String fileName) async {
     var comicSource = await ComicSourceParser().createAndParse(js, fileName);
     ComicSourceManager().add(comicSource);
-    _addAllPagesWithComicSource(comicSource);
+    DataService.addAllPagesWithComicSource(comicSource);
     appdata.saveData();
     App.forceRebuild();
   }
@@ -510,82 +511,6 @@ class _ComicSourceListState extends State<_ComicSourceList> {
       },
     );
   }
-}
-
-void _validatePages() {
-  List explorePages = appdata.settings['explore_pages'];
-  List categoryPages = appdata.settings['categories'];
-  List networkFavorites = appdata.settings['favorites'];
-
-  var totalExplorePages = ComicSource.all()
-      .map((e) => e.explorePages.map((e) => e.title))
-      .expand((element) => element)
-      .toList();
-  var totalCategoryPages = ComicSource.all()
-      .map((e) => e.categoryData?.key)
-      .where((element) => element != null)
-      .map((e) => e!)
-      .toList();
-  var totalNetworkFavorites = ComicSource.all()
-      .map((e) => e.favoriteData?.key)
-      .where((element) => element != null)
-      .map((e) => e!)
-      .toList();
-
-  for (var page in List.from(explorePages)) {
-    if (!totalExplorePages.contains(page)) {
-      explorePages.remove(page);
-    }
-  }
-  for (var page in List.from(categoryPages)) {
-    if (!totalCategoryPages.contains(page)) {
-      categoryPages.remove(page);
-    }
-  }
-  for (var page in List.from(networkFavorites)) {
-    if (!totalNetworkFavorites.contains(page)) {
-      networkFavorites.remove(page);
-    }
-  }
-
-  appdata.settings['explore_pages'] = explorePages.toSet().toList();
-  appdata.settings['categories'] = categoryPages.toSet().toList();
-  appdata.settings['favorites'] = networkFavorites.toSet().toList();
-
-  appdata.saveData();
-}
-
-void _addAllPagesWithComicSource(ComicSource source) {
-  var explorePages = appdata.settings['explore_pages'];
-  var categoryPages = appdata.settings['categories'];
-  var networkFavorites = appdata.settings['favorites'];
-  var searchPages = appdata.settings['searchSources'];
-
-  if (source.explorePages.isNotEmpty) {
-    for (var page in source.explorePages) {
-      if (!explorePages.contains(page.title)) {
-        explorePages.add(page.title);
-      }
-    }
-  }
-  if (source.categoryData != null &&
-      !categoryPages.contains(source.categoryData!.key)) {
-    categoryPages.add(source.categoryData!.key);
-  }
-  if (source.favoriteData != null &&
-      !networkFavorites.contains(source.favoriteData!.key)) {
-    networkFavorites.add(source.favoriteData!.key);
-  }
-  if (source.searchPageData != null && !searchPages.contains(source.key)) {
-    searchPages.add(source.key);
-  }
-
-  appdata.settings['explore_pages'] = explorePages.toSet().toList();
-  appdata.settings['categories'] = categoryPages.toSet().toList();
-  appdata.settings['favorites'] = networkFavorites.toSet().toList();
-  appdata.settings['searchSources'] = searchPages.toSet().toList();
-
-  appdata.saveData();
 }
 
 class _EditFilePage extends StatefulWidget {

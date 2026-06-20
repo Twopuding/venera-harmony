@@ -70,24 +70,25 @@ class ImportComic {
     var dbFile = await selectFile(ext: ['db']);
     final picker = DirectoryPicker();
     final comicSrc = await picker.pickDirectory();
-    Map<String?, List<LocalComic>> imported = {};
     if (dbFile == null || comicSrc == null) {
       return false;
     }
+    return ehViewerFromPaths(dbFile.path, comicSrc.path);
+  }
 
+  Future<bool> ehViewerFromPaths(String dbPath, String downloadDirPath) async {
+    Map<String?, List<LocalComic>> imported = {};
     bool cancelled = false;
-    var controller = showLoadingDialog(App.rootContext, onCancel: () {
-      cancelled = true;
-    });
 
     try {
-      var db = sql.sqlite3.open(dbFile.path);
+      var db = sql.sqlite3.open(dbPath);
+      final comicSrc = Directory(downloadDirPath);
 
       Future<List<LocalComic>> validateComics(List<sql.Row> comics) async {
-        List<LocalComic> imported = [];
+        List<LocalComic> importedComics = [];
         for (var comic in comics) {
           if (cancelled) {
-            return imported;
+            return importedComics;
           }
           var comicDir = Directory(
               FilePath.join(comicSrc.path, comic['DIRNAME'] as String));
@@ -101,7 +102,6 @@ class ImportComic {
           var comicObj = await _checkSingleComic(comicDir,
               title: title,
               tags: [
-                //1 >> x
                 [
                   "MISC",
                   "DOUJINSHI",
@@ -119,9 +119,9 @@ class ImportComic {
           if (comicObj == null) {
             continue;
           }
-          imported.add(comicObj);
+          importedComics.add(comicObj);
         }
-        return imported;
+        return importedComics;
       }
 
       var tags = <String>[""];
@@ -152,15 +152,10 @@ class ImportComic {
         }
       }
       db.dispose();
-
-      //Android specific
-      var cache = FilePath.join(App.cachePath, dbFile.name);
-      await File(cache).deleteIgnoreError();
     } catch (e, s) {
       Log.error("Import Comic", e.toString(), s);
-      App.rootContext.showMessage(message: e.toString());
+      return false;
     }
-    controller.close();
     if (cancelled) return false;
     return registerComics(imported, copyToLocal);
   }
@@ -424,5 +419,61 @@ class ImportComic {
       return false;
     }
     return true;
+  }
+
+  Future<bool> fromDirectoryPath(String path, {bool single = true}) async {
+    final dir = Directory(path);
+    if (!await dir.exists()) {
+      return false;
+    }
+    Map<String?, List<LocalComic>> imported = {selectedFolder: []};
+    try {
+      if (single) {
+        var result = await _checkSingleComic(dir);
+        if (result != null) {
+          imported[selectedFolder]!.add(result);
+        } else {
+          return false;
+        }
+      } else {
+        await for (var entry in dir.list()) {
+          if (entry is Directory) {
+            var result = await _checkSingleComic(entry);
+            if (result != null) {
+              imported[selectedFolder]!.add(result);
+            }
+          }
+        }
+      }
+    } catch (e, s) {
+      Log.error("Import Comic", e.toString(), s);
+      return false;
+    }
+    return registerComics(imported, copyToLocal);
+  }
+
+  Future<bool> multipleCbzFromPath(String path) async {
+    final dir = Directory(path);
+    if (!await dir.exists()) {
+      return false;
+    }
+    final files = (await dir.list().toList()).whereType<File>().toList();
+    const supportedExtensions = ['cbz', 'zip', '7z', 'cb7'];
+    files.removeWhere((e) => !supportedExtensions.contains(e.extension));
+    Map<String?, List<LocalComic>> imported = {selectedFolder: []};
+    var comics = <LocalComic>[];
+    for (var file in files) {
+      try {
+        var comic = await CBZ.import(file);
+        comics.add(comic);
+      } catch (e, s) {
+        Log.error("Import Comic", e.toString(), s);
+      }
+    }
+    if (comics.isEmpty) {
+      return false;
+    }
+    imported[selectedFolder] = comics;
+    return registerComics(imported, false);
   }
 }

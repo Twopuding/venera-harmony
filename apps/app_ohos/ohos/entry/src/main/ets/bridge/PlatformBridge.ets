@@ -197,7 +197,61 @@ export class PlatformBridge implements MethodCallHandler {
   }
 
   private handleShareFileFromData(call: BridgeMethodCall, result: MethodResult): void {
-    result.notImplemented();
+    if (this.context === null) {
+      result.error('ERROR', 'Context is null', null);
+      return;
+    }
+    let params: ShareFileFromDataParams = this.parseShareFileFromDataArgs(call.args);
+    if (params.data.length === 0) {
+      result.error('ERROR', 'Empty data', null);
+      return;
+    }
+    try {
+      let cacheDir: string = this.context.context.cacheDir;
+      let safeName: string = params.fileName.length > 0 ? params.fileName : 'share.bin';
+      let tempPath: string = cacheDir + '/' + safeName;
+      let file = fileIo.openSync(tempPath, fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
+      let buf = new Uint8Array(params.data);
+      fileIo.writeSync(file.fd, buf.buffer);
+      fileIo.closeSync(file);
+      let shareWant: Want = new Want();
+      shareWant.action = 'ohos.want.action.sendData';
+      shareWant.type = params.mimeType.length > 0 ? params.mimeType : '*/*';
+      shareWant.parameters = {
+        'ohos.extra.param.key.streamUri': 'file://' + tempPath
+      } as Record<string, Object>;
+      this.context.context.startAbility(shareWant).then(() => {
+        result.success(true);
+      }).catch((err: BusinessError) => {
+        hilog.error(DOMAIN, TAG, 'Share file from data failed: ' + err.message);
+        result.error('ERROR', 'Share file from data failed', err.message);
+      });
+    } catch (e) {
+      result.error('ERROR', 'Share file from data exception', null);
+    }
+  }
+
+  private parseShareFileFromDataArgs(args: Object | null): ShareFileFromDataParams {
+    let res: ShareFileFromDataParams = { data: [], mimeType: '*/*', fileName: 'share.bin' };
+    if (args === null) {
+      return res;
+    }
+    try {
+      let jsonStr: string = JSON.stringify(args);
+      let parsed: Record<string, Object> = JSON.parse(jsonStr);
+      if (parsed['data'] !== undefined && Array.isArray(parsed['data'])) {
+        res.data = parsed['data'] as number[];
+      }
+      if (parsed['mimeType'] !== undefined && typeof parsed['mimeType'] === 'string') {
+        res.mimeType = parsed['mimeType'] as string;
+      }
+      if (parsed['fileName'] !== undefined && typeof parsed['fileName'] === 'string') {
+        res.fileName = parsed['fileName'] as string;
+      }
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'Failed to parse shareFileFromData args');
+    }
+    return res;
   }
 
   private handlePickDirectory(result: MethodResult): void {
@@ -526,4 +580,122 @@ interface SetScreenOnParams {
 
 interface AuthenticateParams {
   localizedReason: string;
+}
+
+interface ShareFileFromDataParams {
+  data: number[];
+  mimeType: string;
+  fileName: string;
+}
+
+export class PlatformBiometricAuth {
+  static checkAuthAvailable(authType: userAuth.UserAuthType): boolean {
+    try {
+      userAuth.getAvailableStatus(authType, userAuth.AuthTrustLevel.ATL2);
+      return true;
+    } catch (e) {
+      // try ATL3
+    }
+    try {
+      userAuth.getAvailableStatus(authType, userAuth.AuthTrustLevel.ATL3);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static canCheckBiometrics(): boolean {
+    return PlatformBiometricAuth.checkAuthAvailable(userAuth.UserAuthType.FACE) ||
+      PlatformBiometricAuth.checkAuthAvailable(userAuth.UserAuthType.FINGERPRINT);
+  }
+
+  static canCheckFace(): boolean {
+    return PlatformBiometricAuth.checkAuthAvailable(userAuth.UserAuthType.FACE);
+  }
+
+  static canCheckFingerprint(): boolean {
+    return PlatformBiometricAuth.checkAuthAvailable(userAuth.UserAuthType.FINGERPRINT);
+  }
+
+  static isDeviceSupported(): boolean {
+    let authTypes: userAuth.UserAuthType[] = [
+      userAuth.UserAuthType.FACE,
+      userAuth.UserAuthType.FINGERPRINT,
+      userAuth.UserAuthType.PIN
+    ];
+    for (let i: number = 0; i < authTypes.length; i++) {
+      if (PlatformBiometricAuth.checkAuthAvailable(authTypes[i])) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static authenticateWithType(authType: userAuth.UserAuthType, localizedReason: string): Promise<boolean> {
+    return new Promise<boolean>((resolve: (value: boolean) => void) => {
+      let challenge: Uint8Array = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]);
+      let authTrustLevel: userAuth.AuthTrustLevel = userAuth.AuthTrustLevel.ATL2;
+      if (authType === userAuth.UserAuthType.PIN) {
+        authTrustLevel = userAuth.AuthTrustLevel.ATL1;
+      }
+      let authParam: userAuth.AuthParam = {
+        challenge: challenge,
+        authType: [authType],
+        authTrustLevel: authTrustLevel
+      };
+      let title: string = localizedReason.length > 0 ? localizedReason : 'Please authenticate';
+      let widgetParam: userAuth.WidgetParam = { title: title };
+      if (authType !== userAuth.UserAuthType.PIN) {
+        widgetParam.navigationButtonText = 'Use password';
+      }
+      try {
+        let authInstance: userAuth.UserAuthInstance = userAuth.getUserAuthInstance(authParam, widgetParam);
+        authInstance.on('result', {
+          onResult(authResult: userAuth.UserAuthResult): void {
+            if (authResult.result === userAuth.UserAuthResultCode.SUCCESS) {
+              resolve(true);
+            } else if (authResult.result === 12500011 && authType !== userAuth.UserAuthType.PIN) {
+              PlatformBiometricAuth.authenticateWithType(userAuth.UserAuthType.PIN, localizedReason)
+                .then((ok: boolean) => resolve(ok));
+            } else {
+              resolve(false);
+            }
+          }
+        });
+        authInstance.start();
+      } catch (e) {
+        resolve(false);
+      }
+    });
+  }
+
+  static async authenticate(
+    localizedReason: string,
+    useFace: boolean,
+    useFingerprint: boolean
+  ): Promise<boolean> {
+    if (!PlatformBiometricAuth.canCheckBiometrics() && !PlatformBiometricAuth.isDeviceSupported()) {
+      return true;
+    }
+    let tryFace: boolean = useFace;
+    let tryFingerprint: boolean = useFingerprint;
+    if (!tryFace && !tryFingerprint) {
+      tryFace = PlatformBiometricAuth.canCheckFace();
+      tryFingerprint = !tryFace && PlatformBiometricAuth.canCheckFingerprint();
+    }
+    let authorized: boolean = false;
+    if (tryFace && PlatformBiometricAuth.canCheckFace()) {
+      authorized = await PlatformBiometricAuth.authenticateWithType(
+        userAuth.UserAuthType.FACE, localizedReason);
+    }
+    if (!authorized && tryFingerprint && PlatformBiometricAuth.canCheckFingerprint()) {
+      authorized = await PlatformBiometricAuth.authenticateWithType(
+        userAuth.UserAuthType.FINGERPRINT, localizedReason);
+    }
+    if (!authorized && !PlatformBiometricAuth.canCheckBiometrics()) {
+      authorized = await PlatformBiometricAuth.authenticateWithType(
+        userAuth.UserAuthType.PIN, localizedReason);
+    }
+    return authorized;
+  }
 }
