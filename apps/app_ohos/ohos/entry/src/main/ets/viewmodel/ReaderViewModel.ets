@@ -1,4 +1,6 @@
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { ImageDataSource } from './ImageDataSource';
+import { ImageSizeCache } from './ImageSizeCache';
 
 export enum ReaderMode {
   GALLERY_LR = 0,
@@ -35,8 +37,23 @@ export class ReaderViewModel {
   isToolbarOpen: boolean = false;
   readerMode: ReaderMode = ReaderMode.GALLERY_LR;
   images: string[] = [];
+  imageDataSource: ImageDataSource = new ImageDataSource([], new ImageSizeCache());
   settings: ReaderSettings = { readerMode: ReaderMode.GALLERY_LR, landscape: false };
   private historyTimer: number = -1;
+  private sizeCache: ImageSizeCache = new ImageSizeCache();
+  private screenWidth: number = 360;
+
+  setScreenWidth(width: number): void {
+    this.screenWidth = width;
+  }
+
+  getEstimatedImageHeight(url: string): number {
+    return this.sizeCache.getEstimatedHeight(url, this.screenWidth);
+  }
+
+  cacheImageSize(url: string, width: number, height: number): void {
+    this.sizeCache.cacheSize(url, width, height);
+  }
 
   isGalleryMode(): boolean {
     return this.readerMode === ReaderMode.GALLERY_LR ||
@@ -113,6 +130,7 @@ export class ReaderViewModel {
 
   onImagesLoaded(imageUrls: string[]): void {
     this.images = imageUrls;
+    this.imageDataSource = new ImageDataSource(imageUrls, this.sizeCache);
     this.totalPages = imageUrls.length;
     this.isLoading = false;
   }

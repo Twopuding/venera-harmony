@@ -1,6 +1,7 @@
 import { ReaderViewModel, ReaderMode } from '../viewmodel/ReaderViewModel';
 import { common } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { display } from '@kit.ArkUI';
 
 const DOMAIN = 0x0000;
 const TAG = 'ReaderPage';
@@ -19,6 +20,7 @@ struct ReaderPage {
   private swiperController: SwiperController = new SwiperController();
   private listScroller: Scroller = new Scroller();
   private currentClock: string = '';
+  private screenWidth: number = 360;
 
   aboutToAppear(): void {
     this.viewModel.comicId = this.comicId;
@@ -28,10 +30,17 @@ struct ReaderPage {
     this.viewModel.readerMode = this.viewModel.settings.readerMode;
     this.viewModel.loadChapterImages();
     this.updateClock();
+    this.getScreenWidth();
     setInterval(() => {
       this.updateClock();
     }, 30000);
     hilog.info(DOMAIN, TAG, 'ReaderPage appeared');
+  }
+
+  private getScreenWidth(): void {
+    let displayInfo: display.Display = display.getDefaultDisplaySync();
+    this.screenWidth = displayInfo.width;
+    this.viewModel.setScreenWidth(this.screenWidth);
   }
 
   aboutToDisappear(): void {
@@ -69,6 +78,10 @@ struct ReaderPage {
 
   private onSwiperChange(index: number): void {
     this.viewModel.setCurrentPage(index);
+  }
+
+  private onImageComplete(url: string, width: number, height: number): void {
+    this.viewModel.cacheImageSize(url, width, height);
   }
 
   build() {
@@ -154,20 +167,41 @@ struct ReaderPage {
   @Builder
   buildContinuousReader() {
     List({ scroller: this.listScroller }) {
-      ForEach(this.viewModel.images, (url: string, index: number) => {
+      LazyForEach(this.viewModel.imageDataSource, (url: string, index: number) => {
         ListItem() {
-          Image(url)
-            .width('100%')
-            .objectFit(ImageFit.Contain)
-            .backgroundColor(Color.Black)
+          this.buildImageItem(url, index)
         }
-      }, (url: string, index: number) => url + index.toString())
+      }, (url: string, index: number) => url)
     }
     .width('100%')
     .height('100%')
     .scrollBar(BarState.Off)
-    .cachedCount(3)
+    .cachedCount(8)
+    .edgeEffect(EdgeEffect.Spring)
+    .onScrollFrameBegin((offset: number) => {
+      return { offsetRemain: offset };
+    })
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+  }
+
+  @Builder
+  buildImageItem(url: string, index: number) {
+    Stack() {
+      Column()
+        .width('100%')
+        .height(this.viewModel.getEstimatedImageHeight(url))
+        .backgroundColor('#1a1a1a')
+
+      Image(url)
+        .width('100%')
+        .objectFit(ImageFit.Contain)
+        .backgroundColor(Color.Black)
+        .onComplete((event) => {
+          if (event !== undefined) {
+            this.onImageComplete(url, event.width, event.height);
+          }
+        })
+    }
   }
 
   @Builder
