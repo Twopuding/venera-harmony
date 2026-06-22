@@ -68,6 +68,9 @@ class _ReaderImagesState extends State<_ReaderImages> {
         });
       }
     } else {
+      if (reader.type.sourceKey == 'copy_manga') {
+        await ComicSource.clearCopyMangaDeviceInfo();
+      }
       var cp = reader.widget.chapters?.ids.elementAtOrNull(reader.chapter - 1);
       var res = await reader.type.comicSource!.loadComicPages!(
         reader.widget.cid,

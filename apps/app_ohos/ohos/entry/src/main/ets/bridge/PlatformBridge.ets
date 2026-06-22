@@ -1,5 +1,6 @@
 import { MethodResult } from '@ohos/flutter_ohos';
 import { FlutterBridge, BridgeMethodCall, MethodCallHandler } from './FlutterBridge';
+import { AIBridge } from './AIBridge';
 import { UIAbility } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { picker, fileIo } from '@kit.CoreFileKit';
@@ -16,6 +17,7 @@ export class PlatformBridge implements MethodCallHandler {
   private bridge: FlutterBridge = FlutterBridge.getInstance();
   private context: UIAbility | null = null;
   private mainWindow: window.Window | null = null;
+  private aiBridge: AIBridge = new AIBridge();
 
   setContext(context: UIAbility): void {
     this.context = context;
@@ -69,6 +71,10 @@ export class PlatformBridge implements MethodCallHandler {
       this.handleSetScreenOn(call, result);
     } else if (call.method === 'getProxy') {
       this.handleGetProxy(result);
+    } else if (call.method === 'isAiSuperResolutionAvailable') {
+      this.handleIsAiSuperResolutionAvailable(result);
+    } else if (call.method === 'aiSuperResolution') {
+      this.handleAiSuperResolution(call, result);
     } else {
       result.notImplemented();
     }
@@ -499,6 +505,43 @@ export class PlatformBridge implements MethodCallHandler {
   private handleGetProxy(result: MethodResult): void {
     result.success('No Proxy');
   }
+
+  private handleIsAiSuperResolutionAvailable(result: MethodResult): void {
+    let available: boolean = this.aiBridge.isAvailable();
+    hilog.info(DOMAIN, TAG, 'AI SR available: ' + available.toString());
+    result.success(available);
+  }
+
+  private handleAiSuperResolution(call: BridgeMethodCall, result: MethodResult): void {
+    let imageData: Uint8Array = this.extractImageUint8Array(call.args);
+    this.aiBridge.performSuperResolution(imageData).then((outputData: Uint8Array | null) => {
+      if (outputData !== null) {
+        result.success(outputData);
+      } else {
+        result.success(null);
+      }
+    }).catch((err: Error) => {
+      hilog.error(DOMAIN, TAG, 'AI SR exception: ' + err.message);
+      result.success(null);
+    });
+  }
+
+  private extractImageUint8Array(args: Object | null): Uint8Array {
+    if (args === null) {
+      return new Uint8Array(0);
+    }
+    try {
+      let jsonStr: string = JSON.stringify(args);
+      let parsed: AiSuperResolutionParams = JSON.parse(jsonStr);
+      if (parsed.imageData !== undefined && parsed.imageData !== null) {
+        let arr: Array<number> = parsed.imageData;
+        return new Uint8Array(arr);
+      }
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'Failed to extract image data from args');
+    }
+    return new Uint8Array(0);
+  }
 }
 
 interface LaunchUrlParams {
@@ -526,4 +569,8 @@ interface SetScreenOnParams {
 
 interface AuthenticateParams {
   localizedReason: string;
+}
+
+interface AiSuperResolutionParams {
+  imageData: Array<number>;
 }

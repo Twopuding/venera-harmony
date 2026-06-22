@@ -187,6 +187,8 @@ class _ReaderState extends State<Reader>
 
   var focusNode = FocusNode();
 
+  final srStatusNotifier = ValueNotifier<String>('off');
+
   @override
   void initState() {
     page = widget.initialPage ?? 1;
@@ -231,6 +233,11 @@ class _ReaderState extends State<Reader>
     Future.delayed(const Duration(milliseconds: 200), () {
       LocalFavoritesManager().onRead(cid, type);
     });
+    ReaderImageProvider.onSrStatusChanged = (status, p) {
+      if (p == page || status == 'processing') {
+        srStatusNotifier.value = status;
+      }
+    };
     super.initState();
   }
 
@@ -271,6 +278,8 @@ class _ReaderState extends State<Reader>
 
   @override
   void dispose() {
+    ReaderImageProvider.onSrStatusChanged = null;
+    srStatusNotifier.dispose();
     flushHistory();
     if (isFullscreen) {
       fullscreen();
@@ -322,6 +331,7 @@ class _ReaderState extends State<Reader>
 
   @override
   void onPageChanged() {
+    srStatusNotifier.value = 'off';
     updateHistory();
   }
 

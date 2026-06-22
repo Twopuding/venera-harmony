@@ -245,6 +245,9 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
     if (comicSource == null) {
       return const Res.error('Comic source not found');
     }
+    if (widget.sourceKey == 'copy_manga') {
+      await ComicSource.clearCopyMangaDeviceInfo();
+    }
     isAddToLocalFav = LocalFavoritesManager().isExist(
       widget.id,
       ComicType(widget.sourceKey.hashCode),

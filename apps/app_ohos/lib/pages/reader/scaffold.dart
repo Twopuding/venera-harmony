@@ -611,6 +611,7 @@ class _ReaderScaffoldState extends State<_ReaderScaffold> {
   }
 
   Widget buildPageInfoText() {
+    var srEnabled = appdata.settings['enableAiSuperResolution'] == true && App.isOhos;
     return ValueListenableBuilder<int>(
       valueListenable: _pageInfoNotifier,
       builder: (context, _, __) {
@@ -627,22 +628,56 @@ class _ReaderScaffoldState extends State<_ReaderScaffold> {
             ? "$epName : $pageText"
             : pageText;
 
+        Widget srBadge = const SizedBox.shrink();
+        if (srEnabled) {
+          srBadge = ValueListenableBuilder<String>(
+            valueListenable: context.reader.srStatusNotifier,
+            builder: (context, status, _) {
+              IconData icon;
+              Color color;
+              if (status == 'processing') {
+                icon = Icons.auto_fix_high;
+                color = Colors.orangeAccent;
+              } else if (status == 'done') {
+                icon = Icons.check_circle;
+                color = Colors.greenAccent;
+              } else {
+                icon = Icons.auto_fix_high;
+                color = context.colorScheme.onSurface.withOpacity(0.4);
+              }
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(width: 8),
+                  Icon(icon, size: 12, color: color),
+                  Text(' SR', style: TextStyle(fontSize: 11, color: color)),
+                ],
+              );
+            },
+          );
+        }
+
+        var strokeStyle = TextStyle(
+          fontSize: 14,
+          foreground: Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.4
+            ..color = context.colorScheme.onInverseSurface,
+        );
+
         return Positioned(
           bottom: 13,
           left: 25,
-          child: Stack(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                text,
-                style: TextStyle(
-                  fontSize: 14,
-                  foreground: Paint()
-                    ..style = PaintingStyle.stroke
-                    ..strokeWidth = 1.4
-                    ..color = context.colorScheme.onInverseSurface,
-                ),
+              Stack(
+                children: [
+                  Text(text, style: strokeStyle),
+                  Text(text),
+                ],
               ),
-              Text(text),
+              srBadge,
             ],
           ),
         );
