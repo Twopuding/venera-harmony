@@ -611,7 +611,7 @@ class _ReaderScaffoldState extends State<_ReaderScaffold> {
   }
 
   Widget buildPageInfoText() {
-    var srEnabled = appdata.settings['enableAiSuperResolution'] == true && App.isOhos;
+    var srEnabled = false && appdata.settings['enableAiSuperResolution'] == true && App.isOhos;
     return ValueListenableBuilder<int>(
       valueListenable: _pageInfoNotifier,
       builder: (context, _, __) {

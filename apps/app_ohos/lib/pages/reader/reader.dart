@@ -188,6 +188,7 @@ class _ReaderState extends State<Reader>
   var focusNode = FocusNode();
 
   final srStatusNotifier = ValueNotifier<String>('off');
+  final _processingPages = <int>{};
 
   @override
   void initState() {
@@ -234,8 +235,20 @@ class _ReaderState extends State<Reader>
       LocalFavoritesManager().onRead(cid, type);
     });
     ReaderImageProvider.onSrStatusChanged = (status, p) {
-      if (p == page || status == 'processing') {
-        srStatusNotifier.value = status;
+      if (status == 'processing') {
+        _processingPages.add(p);
+        if (p == page) {
+          srStatusNotifier.value = 'processing';
+        }
+      } else if (status == 'done' || status == 'off') {
+        _processingPages.remove(p);
+        if (p == page) {
+          if (_processingPages.contains(page)) {
+            srStatusNotifier.value = 'processing';
+          } else {
+            srStatusNotifier.value = status;
+          }
+        }
       }
     };
     super.initState();
@@ -279,6 +292,7 @@ class _ReaderState extends State<Reader>
   @override
   void dispose() {
     ReaderImageProvider.onSrStatusChanged = null;
+    _processingPages.clear();
     srStatusNotifier.dispose();
     flushHistory();
     if (isFullscreen) {
@@ -331,6 +345,7 @@ class _ReaderState extends State<Reader>
 
   @override
   void onPageChanged() {
+    _processingPages.clear();
     srStatusNotifier.value = 'off';
     updateHistory();
   }

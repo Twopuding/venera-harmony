@@ -215,7 +215,7 @@ class Settings with ChangeNotifier {
     'onClickFavorite': 'viewDetail', // viewDetail, read
     'enableDnsOverrides': false,
     'dnsOverrides': {},
-    'enableAiSuperResolution': true,
+    'enableAiSuperResolution': false,
     'enableCustomImageProcessing': false,
     'customImageProcessing': defaultCustomImageProcessing,
     'sni': true,

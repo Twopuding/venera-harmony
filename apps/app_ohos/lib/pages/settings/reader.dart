@@ -396,7 +396,7 @@ class _ReaderSettingsState extends State<ReaderSettings> {
           comicSource: isEnabledSpecificSettings ? widget.comicSource : null,
           useDeviceSettings: useDeviceSpecificSettings,
         ).toSliver(),
-        if (App.isOhos)
+        if (false && App.isOhos)
           _SwitchSetting(
             title: "AI Image Super Resolution".tl,
             subtitle: "Enhance comic image clarity with AI".tl,

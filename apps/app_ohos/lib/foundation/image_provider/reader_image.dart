@@ -59,7 +59,7 @@ class ReaderImageProvider
       throw "Error: Empty response body.";
     }
     var processedBytes = imageBytes!;
-    if (appdata.settings['enableAiSuperResolution'] == true && App.isOhos) {
+    if (false && appdata.settings['enableAiSuperResolution'] == true && App.isOhos) {
       try {
         var available = await OhosAiSuperResolution.isAvailable();
         if (available) {
