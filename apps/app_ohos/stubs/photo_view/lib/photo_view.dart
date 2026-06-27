@@ -146,6 +146,8 @@ double _resolveScale(Object? scale, {required double fallback}) {
 class _PhotoViewState extends State<PhotoView> {
   late PhotoViewController _controller;
   late TransformationController _transformationController;
+  double _currentScale = 1.0;
+  Offset _currentPosition = Offset.zero;
 
   @override
   void initState() {
@@ -161,6 +163,34 @@ class _PhotoViewState extends State<PhotoView> {
     }
     _transformationController.dispose();
     super.dispose();
+  }
+
+  void _handleDoubleTap(TapDownDetails details) {
+    final double minScale = _resolveScale(widget.minScale, fallback: 1.0);
+    final double maxScale = _resolveScale(widget.maxScale, fallback: 5.0);
+    final double targetScale = _currentScale > 1.5 ? minScale : maxScale * 0.8;
+    
+    final Offset tapPosition = details.localPosition;
+    final Offset centerOffset = Offset(
+      tapPosition.dx * (1 - targetScale),
+      tapPosition.dy * (1 - targetScale),
+    );
+    
+    final Matrix4 matrix = Matrix4.identity()
+      ..translate(centerOffset.dx, centerOffset.dy)
+      ..scale(targetScale);
+    
+    _transformationController.value = matrix;
+    _currentScale = targetScale;
+    _currentPosition = centerOffset;
+    
+    widget.onScaleUpdate?.call(targetScale);
+  }
+
+  void _onInteractionUpdate(ScaleUpdateDetails details) {
+    _currentScale = details.scale;
+    _currentPosition = details.focalPointDelta;
+    widget.onScaleUpdate?.call(details.scale);
   }
 
   @override
@@ -197,7 +227,13 @@ class _PhotoViewState extends State<PhotoView> {
         transformationController: _transformationController,
         minScale: _resolveScale(widget.minScale, fallback: 1.0),
         maxScale: _resolveScale(widget.maxScale, fallback: double.infinity),
-        child: heroWrapper,
+        clipBehavior: Clip.hardEdge,
+        constrained: false,
+        onInteractionUpdate: _onInteractionUpdate,
+        child: GestureDetector(
+          onDoubleTapDown: _handleDoubleTap,
+          child: heroWrapper,
+        ),
       ),
     );
   }
