@@ -39,6 +39,8 @@ export class ReaderViewModel {
   images: string[] = [];
   imageDataSource: ImageDataSource = new ImageDataSource([], new ImageSizeCache());
   settings: ReaderSettings = { readerMode: ReaderMode.GALLERY_LR, landscape: false };
+  onChapterChanged: (() => void) | null = null;
+  onPageChanged: ((page: number) => void) | null = null;
   private historyTimer: number = -1;
   private sizeCache: ImageSizeCache = new ImageSizeCache();
   private screenWidth: number = 360;
@@ -91,6 +93,9 @@ export class ReaderViewModel {
     if (this.currentPage < this.totalPages - 1) {
       this.currentPage = this.currentPage + 1;
       this.debouncedUpdateHistory();
+      if (this.onPageChanged !== null) {
+        this.onPageChanged(this.currentPage);
+      }
     } else {
       if (this.currentChapter < this.chapters.length - 1) {
         this.toChapter(this.currentChapter + 1);
@@ -102,6 +107,9 @@ export class ReaderViewModel {
     if (this.currentPage > 0) {
       this.currentPage = this.currentPage - 1;
       this.debouncedUpdateHistory();
+      if (this.onPageChanged !== null) {
+        this.onPageChanged(this.currentPage);
+      }
     } else {
       if (this.currentChapter > 0) {
         this.toChapter(this.currentChapter - 1);
@@ -116,6 +124,9 @@ export class ReaderViewModel {
     this.currentChapter = index;
     this.currentPage = 0;
     this.loadChapterImages();
+    if (this.onChapterChanged !== null) {
+      this.onChapterChanged();
+    }
   }
 
   toggleToolbar(): void {
@@ -139,6 +150,9 @@ export class ReaderViewModel {
     if (page >= 0 && page < this.totalPages) {
       this.currentPage = page;
       this.debouncedUpdateHistory();
+      if (this.onPageChanged !== null) {
+        this.onPageChanged(this.currentPage);
+      }
     }
   }
 

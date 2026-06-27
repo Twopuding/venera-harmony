@@ -15,19 +15,28 @@ struct ReaderPage {
   @StorageLink('reader_initialPage') initialPage: number = 0;
   @StorageLink('reader_safeAreaTop') safeAreaTop: number = 0;
   @StorageLink('reader_safeAreaBottom') safeAreaBottom: number = 0;
+  @State currentPageIndex: number = 0;
+  @State screenWidth: number = 360;
+  @State screenHeight: number = 640;
 
   private viewModel: ReaderViewModel = new ReaderViewModel();
   private swiperController: SwiperController = new SwiperController();
   private listScroller: Scroller = new Scroller();
   private currentClock: string = '';
-  private screenWidth: number = 360;
 
   aboutToAppear(): void {
     this.viewModel.comicId = this.comicId;
     this.viewModel.sourceKey = this.sourceKey;
     this.viewModel.currentChapter = this.initialEp;
     this.viewModel.currentPage = this.initialPage;
+    this.currentPageIndex = this.initialPage;
     this.viewModel.readerMode = this.viewModel.settings.readerMode;
+    this.viewModel.onChapterChanged = (): void => {
+      this.onChapterChanged();
+    };
+    this.viewModel.onPageChanged = (page: number): void => {
+      this.onPageChanged(page);
+    };
     this.viewModel.loadChapterImages();
     this.updateClock();
     this.getScreenWidth();
@@ -39,7 +48,17 @@ struct ReaderPage {
 
   private getScreenWidth(): void {
     let displayInfo: display.Display = display.getDefaultDisplaySync();
-    this.screenWidth = displayInfo.width;
+    let context = this.getUIContext();
+    console.log('[ReaderPage] displayInfo: width=' + displayInfo.width.toString() + ', height=' + displayInfo.height.toString());
+    if (context !== null) {
+      this.screenWidth = context.px2vp(displayInfo.width);
+      this.screenHeight = context.px2vp(displayInfo.height);
+      console.log('[ReaderPage] UIContext available, converted: width=' + this.screenWidth.toFixed(0) + ', height=' + this.screenHeight.toFixed(0));
+    } else {
+      this.screenWidth = px2vp(displayInfo.width);
+      this.screenHeight = px2vp(displayInfo.height);
+      console.log('[ReaderPage] Using global px2vp: width=' + this.screenWidth.toFixed(0) + ', height=' + this.screenHeight.toFixed(0));
+    }
     this.viewModel.setScreenWidth(this.screenWidth);
   }
 
@@ -72,16 +91,50 @@ struct ReaderPage {
 
   private onSliderChange(value: number, mode: SliderChangeMode): void {
     if (mode === SliderChangeMode.Moving || mode === SliderChangeMode.Click) {
-      this.viewModel.setCurrentPage(Math.floor(value));
+      const page: number = Math.floor(value);
+      this.viewModel.setCurrentPage(page);
+      this.currentPageIndex = page;
     }
   }
 
   private onSwiperChange(index: number): void {
-    this.viewModel.setCurrentPage(index);
+    this.viewModel.currentPage = index;
+    this.currentPageIndex = index;
   }
 
   private onImageComplete(url: string, width: number, height: number): void {
     this.viewModel.cacheImageSize(url, width, height);
+  }
+
+  private onChapterChanged(): void {
+    this.currentPageIndex = 0;
+    this.swiperController.changeIndex(0, true);
+    hilog.info(DOMAIN, TAG, 'Chapter changed, reset to page 0');
+  }
+
+  private onPageChanged(page: number): void {
+    if (this.currentPageIndex !== page) {
+      this.currentPageIndex = page;
+      this.swiperController.changeIndex(page, true);
+      hilog.info(DOMAIN, TAG, 'Page changed to: ' + page.toString());
+    }
+  }
+
+  private getPageIndicatorText(): string {
+    return (this.currentPageIndex + 1).toString() + ' / ' + this.viewModel.totalPages.toString();
+  }
+
+  private onContinuousScroll(start: number, end: number): void {
+    let currentIndex: number;
+    if (start === end) {
+      currentIndex = start;
+    } else {
+      currentIndex = Math.floor((start + end) / 2);
+    }
+    if (currentIndex !== this.currentPageIndex && currentIndex >= 0 && currentIndex < this.viewModel.totalPages) {
+      this.currentPageIndex = currentIndex;
+      this.viewModel.currentPage = currentIndex;
+    }
   }
 
   build() {
@@ -152,7 +205,7 @@ struct ReaderPage {
           .backgroundColor(Color.Black)
       }, (url: string, index: number) => url + index.toString())
     }
-    .index(this.viewModel.currentPage)
+    .index(this.currentPageIndex)
     .indicator(false)
     .loop(false)
     .vertical(this.viewModel.isVerticalMode())
@@ -178,30 +231,30 @@ struct ReaderPage {
     .scrollBar(BarState.Off)
     .cachedCount(8)
     .edgeEffect(EdgeEffect.Spring)
-    .onScrollFrameBegin((offset: number) => {
-      return { offsetRemain: offset };
+    .onScrollIndex((start: number, end: number) => {
+      const page: number = start + 1;
+      const clampedPage: number = Math.max(1, Math.min(page, this.viewModel.totalPages));
+      const pageIndex: number = clampedPage - 1;
+      if (pageIndex !== this.currentPageIndex) {
+        this.currentPageIndex = pageIndex;
+        this.viewModel.currentPage = pageIndex;
+      }
     })
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 
   @Builder
   buildImageItem(url: string, index: number) {
-    Stack() {
-      Column()
-        .width('100%')
-        .height(this.viewModel.getEstimatedImageHeight(url))
-        .backgroundColor('#1a1a1a')
-
-      Image(url)
-        .width('100%')
-        .objectFit(ImageFit.Contain)
-        .backgroundColor(Color.Black)
-        .onComplete((event) => {
-          if (event !== undefined) {
-            this.onImageComplete(url, event.width, event.height);
-          }
-        })
-    }
+    Image(url)
+      .width('100%')
+      .height(this.viewModel.getEstimatedImageHeight(url))
+      .objectFit(ImageFit.Contain)
+      .backgroundColor(Color.Black)
+      .onComplete((event) => {
+        if (event !== undefined) {
+          this.onImageComplete(url, event.width, event.height);
+        }
+      })
   }
 
   @Builder
@@ -261,7 +314,7 @@ struct ReaderPage {
         })
 
         Slider({
-          value: this.viewModel.currentPage,
+          value: this.currentPageIndex,
           min: 0,
           max: Math.max(this.viewModel.totalPages - 1, 0),
           step: 1,
@@ -292,7 +345,7 @@ struct ReaderPage {
       .alignItems(VerticalAlign.Center)
 
       Row() {
-        Text(this.viewModel.getPageIndicator())
+        Text(this.getPageIndicatorText())
           .fontSize(14)
           .fontColor(Color.White)
           .margin({ left: 44 })

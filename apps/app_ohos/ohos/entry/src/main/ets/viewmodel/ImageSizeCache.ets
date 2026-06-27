@@ -19,9 +19,11 @@ export class ImageSizeCache {
   getEstimatedHeight(url: string, containerWidth: number): number {
     const size = this.cache.get(url);
     if (size !== undefined) {
-      return containerWidth * size.height / size.width;
+      const height = containerWidth * size.height / size.width;
+      return height;
     }
-    return containerWidth * this.defaultAspectRatio;
+    const defaultHeight = containerWidth * this.defaultAspectRatio;
+    return defaultHeight;
   }
 
   hasSize(url: string): boolean {
