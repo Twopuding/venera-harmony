@@ -52,6 +52,8 @@ dependencies:
       ref: 2f669c98fb81cff1c64fee93466a1475c77e4273
   display_mode:
     path: stubs/display_mode
+  flutter_saf:
+    path: stubs/flutter_saf
 
 dev_dependencies:
   flutter_test:
