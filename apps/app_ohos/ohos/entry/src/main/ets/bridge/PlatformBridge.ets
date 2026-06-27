@@ -3,7 +3,7 @@ import { FlutterBridge, BridgeMethodCall, MethodCallHandler } from './FlutterBri
 import { AIBridge } from './AIBridge';
 import { ESRGANBridge } from './ESRGANBridge';
 import { UIAbility } from '@kit.AbilityKit';
-import { hilog } from '@kit.PerformanceAnalysisKit';
+import { hilog, hidebug } from '@kit.PerformanceAnalysisKit';
 import { picker, fileIo } from '@kit.CoreFileKit';
 import { batteryInfo, BusinessError } from '@kit.BasicServicesKit';
 import { Want, common } from '@kit.AbilityKit';
@@ -88,6 +88,8 @@ export class PlatformBridge implements MethodCallHandler {
       this.handleEsrganInitialize(call, result);
     } else if (call.method === 'esrganProcess') {
       this.handleEsrganProcess(call, result);
+    } else if (call.method === 'getFreeMemory') {
+      this.handleGetFreeMemory(result);
     } else {
       result.notImplemented();
     }
@@ -753,6 +755,18 @@ export class PlatformBridge implements MethodCallHandler {
       hilog.error(DOMAIN, TAG, 'extractModelUint8Array exception: ' + err.message);
     }
     return new Uint8Array(0);
+  }
+
+  private handleGetFreeMemory(result: MethodResult): void {
+    try {
+      let memInfo: hidebug.SystemMemInfo = hidebug.getSystemMemInfo();
+      let freeMemBytes: number = Number(memInfo.freeMem);
+      hilog.info(DOMAIN, TAG, 'Free memory: ' + freeMemBytes.toString() + ' bytes');
+      result.success(freeMemBytes);
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'Failed to get free memory: ' + JSON.stringify(e));
+      result.success(null);
+    }
   }
 }
 

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
 import 'package:venera/foundation/appdata.dart';
+import 'package:venera/foundation/log.dart';
 import 'package:venera/network/proxy.dart';
 
 class OhosHttpClientAdapter implements HttpClientAdapter {
@@ -29,7 +30,10 @@ class OhosHttpClientAdapter implements HttpClientAdapter {
     client.idleTimeout = const Duration(seconds: 60);
 
     if (appdata.settings['ignoreBadCertificate'] == true) {
-      client.badCertificateCallback = (_, __, ___) => true;
+      client.badCertificateCallback = (cert, host, port) {
+        Log.warning('Network', 'Ignoring bad certificate for $host:$port');
+        return true;
+      };
     }
 
     if (proxy != null) {
@@ -65,6 +69,27 @@ class OhosHttpClientAdapter implements HttpClientAdapter {
     }
   }
 
+  Map<String, String> _getDnsOverrides() {
+    if (appdata.settings['enableDnsOverrides'] != true) {
+      return {};
+    }
+    var config = appdata.settings['dnsOverrides'];
+    if (config is! Map) {
+      return {};
+    }
+    var result = <String, String>{};
+    for (var entry in config.entries) {
+      if (entry.key is String && entry.value is String) {
+        result[entry.key as String] = entry.value as String;
+      }
+    }
+    return result;
+  }
+
+  bool _getSniEnabled() {
+    return appdata.settings['sni'] != false;
+  }
+
   Future<HttpClientRequest> _buildRequest(
     HttpClient client,
     RequestOptions options,
@@ -72,29 +97,54 @@ class OhosHttpClientAdapter implements HttpClientAdapter {
   ) async {
     var method = options.method.toUpperCase();
     var uri = options.uri;
-    HttpClientRequest request;
 
+    var dnsOverrides = _getDnsOverrides();
+    String? originalHost;
+    Uri targetUri = uri;
+
+    if (dnsOverrides.containsKey(uri.host)) {
+      originalHost = uri.host;
+      var overrideIp = dnsOverrides[uri.host]!;
+      targetUri = Uri(
+        scheme: uri.scheme,
+        host: overrideIp,
+        port: uri.port > 0 ? uri.port : (uri.scheme == 'https' ? 443 : 80),
+        path: uri.path.isNotEmpty ? uri.path : '/',
+        query: uri.query,
+        fragment: uri.fragment,
+      );
+      Log.info('Network', 'DNS override: ${uri.host} -> $overrideIp');
+      if (!_getSniEnabled()) {
+        Log.info('Network', 'SNI disabled for request to ${uri.host}');
+      }
+    }
+
+    HttpClientRequest request;
     switch (method) {
       case 'GET':
-        request = await client.getUrl(uri);
+        request = await client.getUrl(targetUri);
         break;
       case 'POST':
-        request = await client.postUrl(uri);
+        request = await client.postUrl(targetUri);
         break;
       case 'PUT':
-        request = await client.putUrl(uri);
+        request = await client.putUrl(targetUri);
         break;
       case 'DELETE':
-        request = await client.deleteUrl(uri);
+        request = await client.deleteUrl(targetUri);
         break;
       case 'PATCH':
-        request = await client.patchUrl(uri);
+        request = await client.patchUrl(targetUri);
         break;
       case 'HEAD':
-        request = await client.headUrl(uri);
+        request = await client.headUrl(targetUri);
         break;
       default:
-        request = await client.openUrl(method, uri);
+        request = await client.openUrl(method, targetUri);
+    }
+
+    if (originalHost != null) {
+      request.headers.set('Host', originalHost);
     }
 
     options.headers.forEach((key, value) {
