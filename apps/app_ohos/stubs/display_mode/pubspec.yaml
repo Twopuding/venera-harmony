@@ -1,0 +1,11 @@
+name: display_mode
+description: Stub for display_mode on HarmonyOS (no-op)
+version: 0.0.1
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.4.4 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
