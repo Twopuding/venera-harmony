@@ -4,7 +4,7 @@ publish_to: 'none'
 version: 1.6.3-fix1+1006004
 
 environment:
-  sdk: '>=3.4.4 <4.0.0'
+  sdk: '>=3.6.0 <4.0.0'
 
 dependencies:
   flutter:
@@ -13,13 +13,13 @@ dependencies:
     sdk: flutter
   intl: any
   crypto: ^3.0.6
-  dio: ^5.4.0
+  dio: ^5.9.2
   html: ^0.15.6
   pointycastle: ^4.0.0
   path: ^1.9.0
   mime: ^2.0.0
   uuid: ^4.5.1
-  sqlite3: ^2.4.7
+  sqlite3: ^2.7.4
   ffi: ^2.0.0
   archive: ^3.4.0
   image: ^4.1.0
