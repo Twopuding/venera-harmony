@@ -212,4 +212,30 @@ class OhosProxy {
       return null;
     }
   }
+
+  static Future<bool> setProxy({
+    required String host,
+    required int port,
+    List<String> exclusionList = const [],
+  }) async {
+    try {
+      var result = await _channel.invokeMethod<bool>('setProxy', {
+        'host': host,
+        'port': port,
+        'exclusionList': exclusionList,
+      });
+      return result ?? false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
+  static Future<bool> clearProxy() async {
+    try {
+      var result = await _channel.invokeMethod<bool>('clearProxy');
+      return result ?? false;
+    } on PlatformException {
+      return false;
+    }
+  }
 }

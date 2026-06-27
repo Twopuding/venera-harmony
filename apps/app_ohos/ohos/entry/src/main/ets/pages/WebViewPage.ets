@@ -177,4 +177,48 @@ struct WebViewPage {
       hilog.error(DOMAIN, TAG, 'Cookie extraction failed');
     }
   }
+
+  async getLocalStorage(): Promise<Record<string, string>> {
+    let jsCode: string = `
+      (function() {
+        var items = {};
+        for (var i = 0; i < localStorage.length; i++) {
+          var key = localStorage.key(i);
+          if (key !== null) {
+            items[key] = localStorage.getItem(key);
+          }
+        }
+        return JSON.stringify(items);
+      })()
+    `;
+    try {
+      let result: string = await this.controller.runJavaScript(jsCode) as string;
+      let parsed: Record<string, string> = JSON.parse(result);
+      return parsed;
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'Failed to get localStorage: ' + e);
+      return {};
+    }
+  }
+
+  async getUserAgent(): Promise<string> {
+    let jsCode: string = 'navigator.userAgent';
+    try {
+      let result: string = await this.controller.runJavaScript(jsCode) as string;
+      return result;
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'Failed to get UserAgent: ' + e);
+      return '';
+    }
+  }
+
+  clearCache(): void {
+    try {
+      this.controller.clearHistory();
+      webview.WebCookieManager.clearAllCookiesSync();
+      hilog.info(DOMAIN, TAG, 'Cache cleared');
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'Failed to clear cache: ' + e);
+    }
+  }
 }

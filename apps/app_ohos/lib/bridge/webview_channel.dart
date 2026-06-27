@@ -78,4 +78,34 @@ class WebViewChannel {
   static Future<void> close() async {
     await _channel.invokeMethod<void>('close');
   }
+
+  static Future<Map<String, String>> getLocalStorage() async {
+    try {
+      var result = await _channel.invokeMethod<Map<dynamic, dynamic>>('getLocalStorage');
+      if (result == null) return {};
+      var localStorage = <String, String>{};
+      result.forEach((key, value) {
+        localStorage[key.toString()] = value.toString();
+      });
+      return localStorage;
+    } on MissingPluginException {
+      return {};
+    }
+  }
+
+  static Future<String?> getUserAgent() async {
+    try {
+      return await _channel.invokeMethod<String>('getUserAgent');
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  static Future<void> clearCache() async {
+    try {
+      await _channel.invokeMethod<void>('clearCache');
+    } on MissingPluginException {
+      //
+    }
+  }
 }

@@ -175,6 +175,28 @@ class AppWebviewState extends State<AppWebview> {
     }
   }
 
+  Future<Map<String, String>> getLocalStorage() async {
+    try {
+      var result = await _channel.invokeMethod<Map<dynamic, dynamic>>('getLocalStorage');
+      if (result == null) return {};
+      var localStorage = <String, String>{};
+      result.forEach((key, value) {
+        localStorage[key.toString()] = value.toString();
+      });
+      return localStorage;
+    } on MissingPluginException {
+      return {};
+    }
+  }
+
+  Future<String?> getUserAgent() async {
+    try {
+      return await _channel.invokeMethod<String>('getUserAgent');
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
   @override
   void dispose() {
     AppWebview._activeStates.remove(this);
@@ -302,6 +324,32 @@ class DesktopWebview {
       return cookies;
     } on MissingPluginException {
       return {};
+    }
+  }
+
+  Future<Map<String, String>> getLocalStorage() async {
+    try {
+      var result = await _channel.invokeMethod<Map<dynamic, dynamic>>('getLocalStorage');
+      if (result == null) return {};
+      var localStorage = <String, String>{};
+      result.forEach((key, value) {
+        localStorage[key.toString()] = value.toString();
+      });
+      return localStorage;
+    } on MissingPluginException {
+      return {};
+    }
+  }
+
+  Future<String?> getUserAgent() async {
+    try {
+      var ua = await _channel.invokeMethod<String>('getUserAgent');
+      if (ua != null) {
+        _ua = ua;
+      }
+      return ua;
+    } on MissingPluginException {
+      return null;
     }
   }
 

@@ -9,6 +9,7 @@ import { batteryInfo, BusinessError } from '@kit.BasicServicesKit';
 import { Want, common } from '@kit.AbilityKit';
 import { window } from '@kit.ArkUI';
 import { userAuth } from '@kit.UserAuthenticationKit';
+import { connection } from '@kit.NetworkKit';
 
 const CHANNEL_NAME: string = 'venera/method_channel';
 const TAG: string = 'PlatformBridge';
@@ -73,6 +74,10 @@ export class PlatformBridge implements MethodCallHandler {
       this.handleSetScreenOn(call, result);
     } else if (call.method === 'getProxy') {
       this.handleGetProxy(result);
+    } else if (call.method === 'setProxy') {
+      this.handleSetProxy(call, result);
+    } else if (call.method === 'clearProxy') {
+      this.handleClearProxy(result);
     } else if (call.method === 'isAiSuperResolutionAvailable') {
       this.handleIsAiSuperResolutionAvailable(result);
     } else if (call.method === 'aiSuperResolution') {
@@ -211,7 +216,63 @@ export class PlatformBridge implements MethodCallHandler {
   }
 
   private handleShareFileFromData(call: BridgeMethodCall, result: MethodResult): void {
-    result.notImplemented();
+    if (this.context === null) {
+      result.error('ERROR', 'Context is null', null);
+      return;
+    }
+    let params: ShareFileFromDataParams = this.parseShareFileFromDataArgs(call.args);
+    if (params.data.length === 0) {
+      result.error('ERROR', 'No data to share', null);
+      return;
+    }
+    try {
+      let cacheDir: string = this.context.context.cacheDir;
+      let fileName: string = params.fileNameOverride.length > 0 ? params.fileNameOverride : 'shared_file';
+      let tempFilePath: string = cacheDir + '/' + fileName;
+      let file: fileIo.File = fileIo.openSync(tempFilePath, fileIo.OpenMode.CREATE | fileIo.OpenMode.WRITE_ONLY);
+      fileIo.writeSync(file.fd, params.data);
+      fileIo.closeSync(file);
+      let shareWant: Want = new Want();
+      shareWant.action = 'ohos.want.action.sendData';
+      shareWant.type = params.mimeType;
+      shareWant.parameters = {
+        'ohos.extra.param.key.streamUri': tempFilePath
+      } as Record<string, Object>;
+      let context: common.UIAbilityContext = this.context.context;
+      context.startAbility(shareWant).then(() => {
+        hilog.info(DOMAIN, TAG, 'Share file from data succeeded');
+        result.success(true);
+      }).catch((err: BusinessError) => {
+        hilog.error(DOMAIN, TAG, 'Share file from data failed: ' + err.message);
+        result.error('ERROR', 'Share file from data failed', err.message);
+      });
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'Share file from data exception: ' + JSON.stringify(e));
+      result.error('ERROR', 'Share file from data exception', null);
+    }
+  }
+
+  private parseShareFileFromDataArgs(args: Object | null): ShareFileFromDataParams {
+    let res: ShareFileFromDataParams = { data: new Uint8Array(0), mimeType: '*/*', fileNameOverride: '' };
+    if (args === null) {
+      return res;
+    }
+    try {
+      let jsonStr: string = JSON.stringify(args);
+      let parsed: ShareFileFromDataParsedParams = JSON.parse(jsonStr);
+      if (parsed.data !== undefined && parsed.data !== null && Array.isArray(parsed.data)) {
+        res.data = new Uint8Array(parsed.data);
+      }
+      if (parsed.mimeType !== undefined && parsed.mimeType !== null) {
+        res.mimeType = parsed.mimeType;
+      }
+      if (parsed.fileNameOverride !== undefined && parsed.fileNameOverride !== null) {
+        res.fileNameOverride = parsed.fileNameOverride;
+      }
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'Failed to parse shareFileFromData args');
+    }
+    return res;
   }
 
   private handlePickDirectory(result: MethodResult): void {
@@ -511,7 +572,79 @@ export class PlatformBridge implements MethodCallHandler {
   }
 
   private handleGetProxy(result: MethodResult): void {
-    result.success('No Proxy');
+    connection.getDefaultHttpProxy().then((proxy: connection.HttpProxy) => {
+      if (proxy.host.length > 0 && proxy.port > 0) {
+        let proxyUrl: string = 'http://' + proxy.host + ':' + proxy.port.toString();
+        hilog.info(DOMAIN, TAG, 'Current proxy: ' + proxyUrl);
+        result.success(proxyUrl);
+      } else {
+        hilog.info(DOMAIN, TAG, 'No proxy configured');
+        result.success('No Proxy');
+      }
+    }).catch((err: BusinessError) => {
+      hilog.error(DOMAIN, TAG, 'Get proxy failed: ' + err.message);
+      result.success('No Proxy');
+    });
+  }
+
+  private handleSetProxy(call: BridgeMethodCall, result: MethodResult): void {
+    let params: SetProxyParams = this.parseSetProxyArgs(call.args);
+    if (params.host.length === 0 || params.port === 0) {
+      hilog.error(DOMAIN, TAG, 'Invalid proxy parameters');
+      result.success(false);
+      return;
+    }
+    try {
+      let httpProxy: connection.HttpProxy = {
+        host: params.host,
+        port: params.port,
+        exclusionList: params.exclusionList
+      };
+      connection.setAppHttpProxy(httpProxy);
+      hilog.info(DOMAIN, TAG, 'Proxy set: ' + params.host + ':' + params.port.toString());
+      result.success(true);
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'Set proxy exception: ' + JSON.stringify(e));
+      result.success(false);
+    }
+  }
+
+  private parseSetProxyArgs(args: Object | null): SetProxyParams {
+    let res: SetProxyParams = { host: '', port: 0, exclusionList: [] };
+    if (args === null) {
+      return res;
+    }
+    try {
+      let jsonStr: string = JSON.stringify(args);
+      let parsed: SetProxyParsedParams = JSON.parse(jsonStr);
+      if (parsed.host !== undefined && parsed.host !== null) {
+        res.host = parsed.host;
+      }
+      if (parsed.port !== undefined && parsed.port !== null) {
+        res.port = parsed.port;
+      }
+      if (parsed.exclusionList !== undefined && parsed.exclusionList !== null && Array.isArray(parsed.exclusionList)) {
+        res.exclusionList = parsed.exclusionList;
+      }
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'Failed to parse setProxy args');
+    }
+    return res;
+  }
+
+  private handleClearProxy(result: MethodResult): void {
+    try {
+      connection.setAppHttpProxy({
+        host: '',
+        port: 0,
+        exclusionList: []
+      });
+      hilog.info(DOMAIN, TAG, 'Proxy cleared');
+      result.success(true);
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'Clear proxy exception: ' + JSON.stringify(e));
+      result.success(false);
+    }
   }
 
   private handleIsAiSuperResolutionAvailable(result: MethodResult): void {
@@ -637,6 +770,18 @@ interface ShareFileParams {
   fileNameOverride: string;
 }
 
+interface ShareFileFromDataParams {
+  data: Uint8Array;
+  mimeType: string;
+  fileNameOverride: string;
+}
+
+interface ShareFileFromDataParsedParams {
+  data: Array<number>;
+  mimeType: string;
+  fileNameOverride: string;
+}
+
 interface SaveFileParsedParams {
   sourceFilePath: string;
   suggestedName: string;
@@ -644,6 +789,18 @@ interface SaveFileParsedParams {
 
 interface SetScreenOnParams {
   on: boolean;
+}
+
+interface SetProxyParams {
+  host: string;
+  port: number;
+  exclusionList: Array<string>;
+}
+
+interface SetProxyParsedParams {
+  host: string;
+  port: number;
+  exclusionList: Array<string>;
 }
 
 interface AuthenticateParams {

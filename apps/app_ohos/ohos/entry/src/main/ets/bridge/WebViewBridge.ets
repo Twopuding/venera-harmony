@@ -87,6 +87,20 @@ export class WebViewBridge implements MethodCallHandler {
     };
     this.bridge.invokeMethod(CHANNEL_NAME, 'onCloudflareResolved', params);
   }
+
+  onLocalStorageReceived(localStorage: Record<string, string>): void {
+    let params: WebViewLocalStorageParams = {
+      localStorage: localStorage
+    };
+    this.bridge.invokeMethod(CHANNEL_NAME, 'onLocalStorageReceived', params);
+  }
+
+  onUserAgentReceived(userAgent: string): void {
+    let params: WebViewUserAgentParams = {
+      userAgent: userAgent
+    };
+    this.bridge.invokeMethod(CHANNEL_NAME, 'onUserAgentReceived', params);
+  }
 }
 
 interface WebViewOpenParams {
@@ -105,4 +119,12 @@ interface WebViewUrlParams {
 interface WebViewCloudflareParams {
   url: string;
   cookies: string;
+}
+
+interface WebViewLocalStorageParams {
+  localStorage: Record<string, string>;
+}
+
+interface WebViewUserAgentParams {
+  userAgent: string;
 }
