@@ -1,7 +1,7 @@
 name: venera
 description: "Venera Comic Reader for HarmonyOS"
 publish_to: 'none'
-version: 1.6.3+1006003
+version: 1.6.3-fix1+1006004
 
 environment:
   sdk: '>=3.4.4 <4.0.0'
