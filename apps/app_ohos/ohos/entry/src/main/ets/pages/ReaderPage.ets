@@ -18,6 +18,9 @@ struct ReaderPage {
   @State currentPageIndex: number = 0;
   @State screenWidth: number = 360;
   @State screenHeight: number = 640;
+  @State listHeight: number = 0;
+  @State visibleStart: number = 0;
+  @State visibleEnd: number = 0;
 
   private viewModel: ReaderViewModel = new ReaderViewModel();
   private swiperController: SwiperController = new SwiperController();
@@ -124,16 +127,37 @@ struct ReaderPage {
     return (this.currentPageIndex + 1).toString() + ' / ' + this.viewModel.totalPages.toString();
   }
 
-  private onContinuousScroll(start: number, end: number): void {
-    let currentIndex: number;
-    if (start === end) {
-      currentIndex = start;
-    } else {
-      currentIndex = Math.floor((start + end) / 2);
+  private updatePageByVisibleArea(): void {
+    if (this.listHeight <= 0 || this.viewModel.totalPages <= 0) {
+      return;
     }
-    if (currentIndex !== this.currentPageIndex && currentIndex >= 0 && currentIndex < this.viewModel.totalPages) {
-      this.currentPageIndex = currentIndex;
-      this.viewModel.currentPage = currentIndex;
+    const offset: OffsetResult = this.listScroller.currentOffset();
+    let context = this.getUIContext();
+    if (context === null) {
+      return;
+    }
+    const offsetVp: number = context.px2vp(offset.yOffset);
+    let maxVisibleArea: number = 0;
+    let maxVisibleIndex: number = this.currentPageIndex;
+    const start: number = Math.max(0, this.visibleStart);
+    const end: number = Math.min(this.visibleEnd, this.viewModel.totalPages - 1);
+    for (let i: number = start; i <= end; i++) {
+      const rect: RectResult = this.listScroller.getItemRect(i);
+      if (rect.height <= 0) {
+        continue;
+      }
+      const visibleTop: number = Math.max(rect.y, offsetVp);
+      const visibleBottom: number = Math.min(rect.y + rect.height, offsetVp + this.listHeight);
+      const visibleArea: number = visibleBottom - visibleTop;
+      if (visibleArea > maxVisibleArea) {
+        maxVisibleArea = visibleArea;
+        maxVisibleIndex = i;
+      }
+    }
+    if (maxVisibleIndex !== this.currentPageIndex &&
+      maxVisibleIndex >= 0 && maxVisibleIndex < this.viewModel.totalPages) {
+      this.currentPageIndex = maxVisibleIndex;
+      this.viewModel.currentPage = maxVisibleIndex;
     }
   }
 
@@ -232,13 +256,14 @@ struct ReaderPage {
     .cachedCount(8)
     .edgeEffect(EdgeEffect.Spring)
     .onScrollIndex((start: number, end: number) => {
-      const page: number = start + 1;
-      const clampedPage: number = Math.max(1, Math.min(page, this.viewModel.totalPages));
-      const pageIndex: number = clampedPage - 1;
-      if (pageIndex !== this.currentPageIndex) {
-        this.currentPageIndex = pageIndex;
-        this.viewModel.currentPage = pageIndex;
-      }
+      this.visibleStart = start;
+      this.visibleEnd = end;
+    })
+    .onDidScroll((_scrollOffset: number, _scrollState: ScrollState) => {
+      this.updatePageByVisibleArea();
+    })
+    .onAreaChange((_oldValue: Area, newValue: Area) => {
+      this.listHeight = newValue.height as number;
     })
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }

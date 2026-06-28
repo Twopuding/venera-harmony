@@ -798,10 +798,21 @@ class _ContinuousModeState extends State<_ContinuousMode>
   }
 
   void onPositionChanged() {
-    if (itemPositionsListener.itemPositions.value.isEmpty) {
+    final positions = itemPositionsListener.itemPositions.value;
+    if (positions.isEmpty) {
       return;
     }
-    var page = itemPositionsListener.itemPositions.value.first.index;
+    int page = positions.first.index;
+    double maxVisibleFraction = 0;
+    for (final pos in positions) {
+      final visibleTop = pos.itemLeadingEdge.clamp(0.0, 1.0);
+      final visibleBottom = pos.itemTrailingEdge.clamp(0.0, 1.0);
+      final fraction = visibleBottom - visibleTop;
+      if (fraction > maxVisibleFraction) {
+        maxVisibleFraction = fraction;
+        page = pos.index;
+      }
+    }
     page = page.clamp(1, reader.maxPage);
     if (page != reader.page) {
       reader.setPageQuiet(page);
