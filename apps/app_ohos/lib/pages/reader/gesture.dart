@@ -144,7 +144,7 @@ class _ReaderGestureDetectorState extends AutomaticGlobalState<_ReaderGestureDet
         }
       } else {
         if (!context.reader.toPrevPage() && !context.reader.isFirstChapterOfGroup) {
-          context.reader.toPrevChapter(toLastPage: true);
+          context.reader.toPrevChapter();
         }
       }
     }

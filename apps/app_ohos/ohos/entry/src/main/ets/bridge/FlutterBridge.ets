@@ -9,6 +9,7 @@ const CHANNEL_PLATFORM: string = 'venera/method_channel';
 export interface BridgeMethodCall {
   method: string;
   args: Object | null;
+  rawCall?: MethodCall;
 }
 
 export interface MethodCallHandler {
@@ -54,7 +55,8 @@ export class FlutterBridge {
       onMethodCall: (call: MethodCall, result: MethodResult) => {
         let bridgeCall: BridgeMethodCall = {
           method: call.method,
-          args: call.args !== undefined ? call.args : null
+          args: call.args !== undefined ? call.args : null,
+          rawCall: call
         };
         handler.onMethodCall(bridgeCall, result);
       }

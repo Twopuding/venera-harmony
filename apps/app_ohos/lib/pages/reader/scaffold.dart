@@ -611,7 +611,7 @@ class _ReaderScaffoldState extends State<_ReaderScaffold> {
   }
 
   Widget buildPageInfoText() {
-    var srEnabled = false && appdata.settings['enableAiSuperResolution'] == true && App.isOhos;
+    var srEnabled = appdata.settings.getReaderSetting(context.reader.cid, context.reader.type.sourceKey, 'enableAiSuperResolution') == true && App.isOhos;
     return ValueListenableBuilder<int>(
       valueListenable: _pageInfoNotifier,
       builder: (context, _, __) {
@@ -630,9 +630,10 @@ class _ReaderScaffoldState extends State<_ReaderScaffold> {
 
         Widget srBadge = const SizedBox.shrink();
         if (srEnabled) {
-          srBadge = ValueListenableBuilder<String>(
+          srBadge = ValueListenableBuilder<Map<int, String>>(
             valueListenable: context.reader.srStatusNotifier,
-            builder: (context, status, _) {
+            builder: (context, statusMap, _) {
+              var status = statusMap[context.reader.page] ?? 'off';
               IconData icon;
               Color color;
               if (status == 'processing') {

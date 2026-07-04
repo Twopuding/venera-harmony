@@ -6,7 +6,8 @@
   },
   "development": {
     "addedSysCaps": [
-      "SystemCapability.AI.MindSporeLite"
+      "SystemCapability.AI.MindSporeLite",
+      "SystemCapability.AI.Vision.VisionBase"
     ]
   }
 }

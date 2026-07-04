@@ -44,6 +44,7 @@ import 'package:venera/utils/translations.dart';
 import 'package:venera/utils/volume.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:venera/platform/ohos_platform_services.dart';
+import 'package:venera/platform/ohos_super_resolution.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
 part 'scaffold.dart';
@@ -187,7 +188,7 @@ class _ReaderState extends State<Reader>
 
   var focusNode = FocusNode();
 
-  final srStatusNotifier = ValueNotifier<String>('off');
+  final srStatusNotifier = ValueNotifier<Map<int, String>>({});
   final _processingPages = <int>{};
 
   @override
@@ -231,25 +232,22 @@ class _ReaderState extends State<Reader>
       handleVolumeEvent();
     }
     setImageCacheSize();
+    if (App.isOhos) {
+      OhosSuperResolution.reset();
+    }
     Future.delayed(const Duration(milliseconds: 200), () {
       LocalFavoritesManager().onRead(cid, type);
     });
     ReaderImageProvider.onSrStatusChanged = (status, p) {
+      var current = Map<int, String>.from(srStatusNotifier.value);
       if (status == 'processing') {
         _processingPages.add(p);
-        if (p == page) {
-          srStatusNotifier.value = 'processing';
-        }
+        current[p] = 'processing';
       } else if (status == 'done' || status == 'off') {
         _processingPages.remove(p);
-        if (p == page) {
-          if (_processingPages.contains(page)) {
-            srStatusNotifier.value = 'processing';
-          } else {
-            srStatusNotifier.value = status;
-          }
-        }
+        current[p] = status;
       }
+      srStatusNotifier.value = current;
     };
     super.initState();
   }
@@ -346,7 +344,7 @@ class _ReaderState extends State<Reader>
   @override
   void onPageChanged() {
     _processingPages.clear();
-    srStatusNotifier.value = 'off';
+    srStatusNotifier.value = {};
     updateHistory();
   }
 
@@ -528,6 +526,7 @@ abstract mixin class _ImagePerPageHandler {
   }
 
   /// Check if the number of images per page has changed
+  /// Check if the number of images per page has changed
   void _checkImagesPerPageChange() {
     int currentImagesPerPage = imagesPerPage;
     bool currentOrientation = isPortrait;
@@ -594,7 +593,7 @@ abstract mixin class _VolumeListener {
 
   bool toNextChapter();
 
-  bool toPrevChapter({bool toLastPage = false});
+  bool toPrevChapter();
 
   VolumeListener? volumeListener;
 
@@ -606,7 +605,7 @@ abstract mixin class _VolumeListener {
 
   void onUp() {
     if (!toPrevPage()) {
-      toPrevChapter(toLastPage: true);
+      toPrevChapter();
     }
   }
 
@@ -632,9 +631,6 @@ abstract mixin class _VolumeListener {
 abstract mixin class _ReaderLocation {
   int _page = 1;
   int? _pendingPage;
-
-  /// Flag to indicate that the page should jump to the last page after images are loaded.
-  bool _jumpToLastPageOnLoad = false;
 
   int get page => _page;
 
@@ -739,15 +735,14 @@ abstract mixin class _ReaderLocation {
 
   /// Returns true if the chapter is changed
   /// If [toLastPage] is true, the page will be set to the last page of the previous chapter.
-  bool toPrevChapter({bool toLastPage = false}) {
-    return toChapter(chapter - 1, toLastPage: toLastPage);
+  bool toPrevChapter() {
+    return toChapter(chapter - 1);
   }
 
-  bool toChapter(int c, {bool toLastPage = false}) {
+  bool toChapter(int c) {
     if (_validateChapter(c) && !isLoading) {
       chapter = c;
       page = 1;
-      _jumpToLastPageOnLoad = toLastPage;
       update();
       return true;
     }

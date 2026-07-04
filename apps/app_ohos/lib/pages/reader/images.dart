@@ -27,14 +27,6 @@ class _ReaderImagesState extends State<_ReaderImages> {
     ImageDownloader.cancelAllLoadingImages();
   }
 
-  /// Handle jumping to last page when _jumpToLastPageOnLoad is true
-  void _handleJumpToLastPage() {
-    if (reader._jumpToLastPageOnLoad) {
-      reader._page = reader.maxPage;
-      reader._jumpToLastPageOnLoad = false;
-    }
-  }
-
   void load() async {
     if (inProgress) return;
     inProgress = true;
@@ -55,7 +47,6 @@ class _ReaderImagesState extends State<_ReaderImages> {
           reader.images = images;
           reader.isLoading = false;
           inProgress = false;
-          _handleJumpToLastPage();
           Future.microtask(() {
             reader.updateHistory();
           });
@@ -87,7 +78,6 @@ class _ReaderImagesState extends State<_ReaderImages> {
           reader.images = res.data;
           reader.isLoading = false;
           inProgress = false;
-          _handleJumpToLastPage();
           Future.microtask(() {
             reader.updateHistory();
           });
@@ -391,7 +381,7 @@ class _GalleryModeState extends State<_GalleryMode>
         },
         onPageChanged: (i) {
           if (i == 0) {
-            if (reader.isFirstChapterOfGroup || !reader.toPrevChapter(toLastPage: true)) {
+            if (reader.isFirstChapterOfGroup || !reader.toPrevChapter()) {
               controller.jumpToPage(1);
             }
           } else if (i == totalPages + 1) {
@@ -716,6 +706,7 @@ class _ContinuousModeState extends State<_ContinuousMode>
 
   bool isZoomedIn = false;
   bool isLongPressing = false;
+  bool _isUserDragging = false;
 
   @override
   void initState() {
@@ -817,6 +808,7 @@ class _ContinuousModeState extends State<_ContinuousMode>
     if (page != reader.page) {
       reader.setPageQuiet(page);
       context.readerScaffold.updatePageInfo();
+      reader.srStatusNotifier.value = Map<int, String>.from(reader.srStatusNotifier.value);
       _scheduleHistoryUpdate();
     }
     cacheImages(page);
@@ -910,6 +902,7 @@ class _ContinuousModeState extends State<_ContinuousMode>
 
   bool onScaleUpdate([double? scale]) {
     if (prepareToNextChapter || prepareToPrevChapter) {
+      _isUserDragging = false;
       setState(() {
         prepareToPrevChapter = false;
         prepareToNextChapter = false;
@@ -969,6 +962,7 @@ class _ContinuousModeState extends State<_ContinuousMode>
         ImageProvider image = _createImageProvider(index, context);
 
         return RepaintBoundary(
+          key: ValueKey(imageKey),
           child: ColoredBox(
             color: context.colorScheme.surface,
             child: ComicImage(
@@ -1005,6 +999,7 @@ class _ContinuousModeState extends State<_ContinuousMode>
     widget = Listener(
       onPointerDown: (event) {
         fingers++;
+        _isUserDragging = true;
         if (fingers > 1 && !disableScroll) {
           setState(() {
             disableScroll = true;
@@ -1025,9 +1020,10 @@ class _ContinuousModeState extends State<_ContinuousMode>
           });
         }
         if (fingers == 0) {
+          _isUserDragging = false;
           if (jumpToPrevChapter) {
             context.readerScaffold.setFloatingButton(0);
-            reader.toPrevChapter(toLastPage: true);
+            reader.toPrevChapter();
           } else if (jumpToNextChapter) {
             context.readerScaffold.setFloatingButton(0);
             reader.toNextChapter();
@@ -1036,6 +1032,9 @@ class _ContinuousModeState extends State<_ContinuousMode>
       },
       onPointerCancel: (event) {
         fingers--;
+        if (fingers <= 0) {
+          _isUserDragging = false;
+        }
         if (fingers <= 1 && disableScroll) {
           setState(() {
             disableScroll = false;
@@ -1090,7 +1089,8 @@ class _ContinuousModeState extends State<_ContinuousMode>
         var scale = photoViewController.scale ?? 1.0;
 
         if (notification is ScrollUpdateNotification &&
-            (scale - 1).abs() < 0.05) {
+            (scale - 1).abs() < 0.05 &&
+            _isUserDragging) {
           if (!scrollController.hasClients) return false;
           if (scrollController.position.pixels <=
                   scrollController.position.minScrollExtent &&

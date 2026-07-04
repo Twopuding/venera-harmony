@@ -1,7 +1,6 @@
 import { MethodResult } from '@ohos/flutter_ohos';
 import { FlutterBridge, BridgeMethodCall, MethodCallHandler } from './FlutterBridge';
-import { AIBridge } from './AIBridge';
-import { ESRGANBridge } from './ESRGANBridge';
+import { SuperResolutionBridge } from './SuperResolutionBridge';
 import { UIAbility } from '@kit.AbilityKit';
 import { hilog, hidebug } from '@kit.PerformanceAnalysisKit';
 import { picker, fileIo } from '@kit.CoreFileKit';
@@ -19,8 +18,7 @@ export class PlatformBridge implements MethodCallHandler {
   private bridge: FlutterBridge = FlutterBridge.getInstance();
   private context: UIAbility | null = null;
   private mainWindow: window.Window | null = null;
-  private aiBridge: AIBridge = new AIBridge();
-  private esrganBridge: ESRGANBridge = new ESRGANBridge();
+  private srBridge: SuperResolutionBridge = new SuperResolutionBridge();
 
   setContext(context: UIAbility): void {
     this.context = context;
@@ -78,16 +76,12 @@ export class PlatformBridge implements MethodCallHandler {
       this.handleSetProxy(call, result);
     } else if (call.method === 'clearProxy') {
       this.handleClearProxy(result);
-    } else if (call.method === 'isAiSuperResolutionAvailable') {
-      this.handleIsAiSuperResolutionAvailable(result);
-    } else if (call.method === 'aiSuperResolution') {
-      this.handleAiSuperResolution(call, result);
-    } else if (call.method === 'esrganIsAvailable') {
-      this.handleEsrganIsAvailable(result);
-    } else if (call.method === 'esrganInitialize') {
-      this.handleEsrganInitialize(call, result);
-    } else if (call.method === 'esrganProcess') {
-      this.handleEsrganProcess(call, result);
+    } else if (call.method === 'srIsAvailable') {
+      this.handleSrIsAvailable(result);
+    } else if (call.method === 'srInitialize') {
+      this.handleSrInitialize(call, result);
+    } else if (call.method === 'srProcessFile') {
+      this.handleSrProcessFile(call, result);
     } else if (call.method === 'getFreeMemory') {
       this.handleGetFreeMemory(result);
     } else {
@@ -649,112 +643,90 @@ export class PlatformBridge implements MethodCallHandler {
     }
   }
 
-  private handleIsAiSuperResolutionAvailable(result: MethodResult): void {
-    let available: boolean = this.aiBridge.isAvailable();
-    hilog.info(DOMAIN, TAG, 'AI SR available: ' + available.toString());
+  private handleSrIsAvailable(result: MethodResult): void {
+    let available: boolean = this.srBridge.isAvailable();
+    hilog.info(DOMAIN, TAG, 'SR isAvailable: backend=' + this.srBridge.getBackendType() + ' available=' + available.toString());
     result.success(available);
   }
 
-  private handleAiSuperResolution(call: BridgeMethodCall, result: MethodResult): void {
-    let imageData: Uint8Array = this.extractImageUint8Array(call.args);
-    this.aiBridge.performSuperResolution(imageData).then((outputData: Uint8Array | null) => {
-      if (outputData !== null) {
-        result.success(outputData);
-      } else {
-        result.success(null);
-      }
-    }).catch((err: Error) => {
-      hilog.error(DOMAIN, TAG, 'AI SR exception: ' + err.message);
-      result.success(null);
-    });
-  }
-
-  private handleEsrganIsAvailable(result: MethodResult): void {
-    let available: boolean = this.esrganBridge.isInitialized();
-    hilog.info(DOMAIN, TAG, 'ESRGAN available: ' + available.toString());
-    result.success(available);
-  }
-
-  private handleEsrganInitialize(call: BridgeMethodCall, result: MethodResult): void {
-    let modelData: Uint8Array = this.extractModelUint8Array(call.args);
-    if (modelData.byteLength === 0) {
-      hilog.error(DOMAIN, TAG, 'ESRGAN initialize: no model data');
+  private handleSrInitialize(call: BridgeMethodCall, result: MethodResult): void {
+    hilog.info(DOMAIN, TAG, 'SR initialize: loading model from rawfile');
+    if (this.context === null) {
+      hilog.error(DOMAIN, TAG, 'SR initialize: context is null');
       result.success(false);
       return;
     }
-    
-    let modelBuffer: ArrayBuffer = modelData.buffer.slice(modelData.byteOffset, modelData.byteOffset + modelData.byteLength);
-    this.esrganBridge.initialize(modelBuffer).then((success: boolean) => {
-      hilog.info(DOMAIN, TAG, 'ESRGAN initialize result: ' + success.toString());
-      result.success(success);
-    }).catch((err: Error) => {
-      hilog.error(DOMAIN, TAG, 'ESRGAN initialize exception: ' + err.message);
+    try {
+      let resMgr = this.context.context.resourceManager;
+      resMgr.getRawFileContent('realesr-animevideov3.ms').then((content: Uint8Array) => {
+        hilog.info(DOMAIN, TAG, 'SR initialize: rawfile loaded, size=' + content.byteLength.toString());
+        let modelBuffer: ArrayBuffer = content.buffer.slice(content.byteOffset, content.byteOffset + content.byteLength);
+        this.srBridge.initialize(modelBuffer).then((success: boolean) => {
+          hilog.info(DOMAIN, TAG, 'SR initialize result: ' + success.toString());
+          result.success(success);
+        }).catch((err: Error) => {
+          hilog.error(DOMAIN, TAG, 'SR initialize exception: ' + err.message);
+          result.success(false);
+        });
+      }).catch((err: BusinessError) => {
+        hilog.error(DOMAIN, TAG, 'SR initialize: failed to read rawfile: ' + err.message);
+        result.success(false);
+      });
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'SR initialize: resourceManager exception: ' + JSON.stringify(e));
       result.success(false);
-    });
+    }
   }
 
-  private handleEsrganProcess(call: BridgeMethodCall, result: MethodResult): void {
-    let imageData: Uint8Array = this.extractImageUint8Array(call.args);
-    if (imageData.byteLength === 0) {
-      hilog.error(DOMAIN, TAG, 'ESRGAN process: no image data');
-      result.success(null);
+  private handleSrProcessFile(call: BridgeMethodCall, result: MethodResult): void {
+    if (call.args === null || call.rawCall === undefined) {
+      hilog.error(DOMAIN, TAG, 'SR processFile: args or rawCall is null');
+      result.success('');
       return;
     }
-    
-    this.esrganBridge.processImage(imageData).then((outputData: Uint8Array | null) => {
-      if (outputData !== null) {
-        result.success(outputData);
-      } else {
-        result.success(null);
+    try {
+      let filePath: Object | null = call.rawCall.argument('filePath');
+      if (filePath === null) {
+        hilog.error(DOMAIN, TAG, 'SR processFile: filePath is null');
+        result.success('');
+        return;
       }
-    }).catch((err: Error) => {
-      hilog.error(DOMAIN, TAG, 'ESRGAN process exception: ' + err.message);
-      result.success(null);
-    });
-  }
+      let pathStr: string = String(filePath);
+      if (pathStr.length === 0) {
+        hilog.error(DOMAIN, TAG, 'SR processFile: filePath is empty');
+        result.success('');
+        return;
+      }
+      hilog.error(DOMAIN, TAG, 'SR processFile: reading from ' + pathStr);
+      let imageFile: fileIo.File = fileIo.openSync(pathStr, fileIo.OpenMode.READ_ONLY);
+      let fileStat: fileIo.Stat = fileIo.statSync(pathStr);
+      let imageData: ArrayBuffer = new ArrayBuffer(fileStat.size);
+      fileIo.readSync(imageFile.fd, imageData);
+      fileIo.closeSync(imageFile);
+      let imageBytes: Uint8Array = new Uint8Array(imageData);
+      hilog.error(DOMAIN, TAG, 'SR processFile: read ' + imageBytes.byteLength.toString() + ' bytes');
 
-  private extractImageUint8Array(args: Object | null): Uint8Array {
-    if (args === null) {
-      hilog.error(DOMAIN, TAG, 'extractImageUint8Array: args is null');
-      return new Uint8Array(0);
-    }
-    
-    try {
-      let params: AiSuperResolutionParams = args as AiSuperResolutionParams;
-      if (params.imageData !== undefined && params.imageData !== null) {
-        let arr: Array<number> = params.imageData;
-        let result: Uint8Array = new Uint8Array(arr);
-        hilog.info(DOMAIN, TAG, 'extractImageUint8Array: extracted, length=' + result.byteLength.toString());
-        return result;
-      }
-      hilog.error(DOMAIN, TAG, 'extractImageUint8Array: imageData not found');
+      this.srBridge.processImage(imageBytes).then((outputData: Uint8Array | null) => {
+        if (outputData !== null) {
+          let outputPath: string = pathStr + '_sr_result';
+          let outFile: fileIo.File = fileIo.openSync(outputPath, fileIo.OpenMode.CREATE | fileIo.OpenMode.WRITE_ONLY);
+          let outBuffer: ArrayBuffer = outputData.buffer.slice(outputData.byteOffset, outputData.byteOffset + outputData.byteLength);
+          fileIo.writeSync(outFile.fd, outBuffer);
+          fileIo.closeSync(outFile);
+          hilog.error(DOMAIN, TAG, 'SR processFile: wrote result to ' + outputPath + ' size=' + outputData.byteLength.toString());
+          result.success(outputPath);
+        } else {
+          hilog.error(DOMAIN, TAG, 'SR processFile: output is null');
+          result.success('');
+        }
+      }).catch((err: BusinessError) => {
+        hilog.error(DOMAIN, TAG, 'SR processFile exception: ' + err.message);
+        result.success('');
+      });
     } catch (e) {
-      let err: Error = e as Error;
-      hilog.error(DOMAIN, TAG, 'extractImageUint8Array exception: ' + err.message);
+      hilog.error(DOMAIN, TAG, 'SR processFile: exception ' + JSON.stringify(e));
+      result.success('');
     }
-    return new Uint8Array(0);
-  }
-  
-  private extractModelUint8Array(args: Object | null): Uint8Array {
-    if (args === null) {
-      hilog.error(DOMAIN, TAG, 'extractModelUint8Array: args is null');
-      return new Uint8Array(0);
-    }
-    
-    try {
-      let params: EsrganModelParams = args as EsrganModelParams;
-      if (params.modelData !== undefined && params.modelData !== null) {
-        let arr: Array<number> = params.modelData;
-        let result: Uint8Array = new Uint8Array(arr);
-        hilog.info(DOMAIN, TAG, 'extractModelUint8Array: extracted, length=' + result.byteLength.toString());
-        return result;
-      }
-      hilog.error(DOMAIN, TAG, 'extractModelUint8Array: modelData not found');
-    } catch (e) {
-      let err: Error = e as Error;
-      hilog.error(DOMAIN, TAG, 'extractModelUint8Array exception: ' + err.message);
-    }
-    return new Uint8Array(0);
   }
 
   private handleGetFreeMemory(result: MethodResult): void {
@@ -821,14 +793,6 @@ interface AuthenticateParams {
   localizedReason: string;
 }
 
-interface AiSuperResolutionParams {
-  imageData: Array<number>;
-}
-
-interface EsrganModelParams {
-  modelData: Array<number>;
-}
-
-interface EsrganImageParams {
-  imageData: Array<number>;
+interface SrProcessFileParams {
+  filePath: string;
 }

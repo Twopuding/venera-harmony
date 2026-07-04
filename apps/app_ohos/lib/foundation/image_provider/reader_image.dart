@@ -9,7 +9,8 @@ import 'base_image_provider.dart';
 import 'reader_image.dart' as image_provider;
 import 'package:venera/foundation/appdata.dart';
 import 'package:venera/foundation/app.dart';
-import 'package:venera/platform/ohos_ai_super_resolution.dart';
+import 'package:venera/platform/ohos_super_resolution.dart';
+import 'package:venera/foundation/cache_manager.dart';
 
 class ReaderImageProvider
     extends BaseImageProvider<image_provider.ReaderImageProvider> {
@@ -59,21 +60,34 @@ class ReaderImageProvider
       throw "Error: Empty response body.";
     }
     var processedBytes = imageBytes!;
-    if (false && appdata.settings['enableAiSuperResolution'] == true && App.isOhos) {
+    var srEnabled = appdata.settings.getReaderSetting(cid, sourceKey ?? '', 'enableAiSuperResolution');
+    debugPrint('[ReaderImage] SR check: enabled=$srEnabled, isOhos=${App.isOhos}, page=$page');
+    if (srEnabled == true && App.isOhos) {
       try {
-        var available = await OhosAiSuperResolution.isAvailable();
-        if (available) {
+        var srCacheKey = 'sr_v4@$imageKey@$sourceKey@$cid@$eid';
+        var srCache = await CacheManager().findCache(srCacheKey);
+        if (srCache != null) {
+          var srCachedBytes = await srCache.readAsBytes();
+          if (srCachedBytes.isNotEmpty) {
+            debugPrint('[ReaderImage] SR cache hit for page $page');
+            processedBytes = Uint8List.fromList(srCachedBytes);
+            onSrStatusChanged?.call('done', page);
+          }
+        } else {
           checkStop();
+          debugPrint('[ReaderImage] SR processing page $page, inputSize=${processedBytes.length}');
           onSrStatusChanged?.call('processing', page);
-          var srResult = await OhosAiSuperResolution.processImage(processedBytes);
+          var srResult = await OhosSuperResolution.processImage(processedBytes);
+          debugPrint('[ReaderImage] SR result for page $page: ${srResult != null ? '${srResult.length} bytes' : 'null'}');
           if (srResult != null) {
             processedBytes = srResult;
             onSrStatusChanged?.call('done', page);
+            try {
+              await CacheManager().writeCache(srCacheKey, srResult);
+            } catch (_) {}
           } else {
             onSrStatusChanged?.call('off', page);
           }
-        } else {
-          onSrStatusChanged?.call('off', page);
         }
       } catch (_) {
         onSrStatusChanged?.call('off', page);

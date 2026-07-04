@@ -238,10 +238,15 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList> {
   final ScrollController _scrollController = ScrollController();
   late final ItemExtentRegistry _extentRegistry;
   bool _initialScrollApplied = false;
+  int? _targetInitialIndex;
+  int _extentCorrectionCount = 0;
+  static const int _maxExtentCorrections = 10;
 
   @override
   void initState() {
     super.initState();
+    _targetInitialIndex =
+        widget.initialScrollIndex > 0 ? widget.initialScrollIndex : null;
     _extentRegistry = widget.itemExtentRegistry ?? ItemExtentRegistry();
     _extentRegistry.scrollDirection = widget.scrollDirection;
     widget.itemScrollController?.attach(
@@ -278,18 +283,34 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList> {
 
   void _applyInitialScroll() {
     if (_initialScrollApplied || !mounted) return;
-    if (!_scrollController.hasClients || widget.initialScrollIndex <= 0) {
+    if (!_scrollController.hasClients || _targetInitialIndex == null) {
       _initialScrollApplied = true;
       return;
     }
-    widget.itemScrollController?.jumpTo(index: widget.initialScrollIndex);
+    widget.itemScrollController?.jumpTo(index: _targetInitialIndex!);
     _initialScrollApplied = true;
     _onScroll();
   }
 
   void _onExtentsChanged() {
-    if (!_initialScrollApplied && widget.initialScrollIndex > 0) {
+    if (!_initialScrollApplied && _targetInitialIndex != null) {
       _applyInitialScroll();
+    } else if (_initialScrollApplied &&
+        _targetInitialIndex != null &&
+        _extentCorrectionCount < _maxExtentCorrections) {
+      _extentCorrectionCount++;
+      if (_scrollController.hasClients && mounted) {
+        final targetOffset = _extentRegistry
+            .offsetForIndex(_targetInitialIndex!)
+            .clamp(0.0, _scrollController.position.maxScrollExtent);
+        final currentOffset = _scrollController.position.pixels;
+        if ((currentOffset - targetOffset).abs() > 1.0) {
+          _scrollController.jumpTo(targetOffset);
+        }
+      }
+      if (_extentCorrectionCount >= _maxExtentCorrections) {
+        _targetInitialIndex = null;
+      }
     }
     _onScroll();
   }
