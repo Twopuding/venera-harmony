@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
@@ -241,6 +243,8 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList> {
   int? _targetInitialIndex;
   int _extentCorrectionCount = 0;
   static const int _maxExtentCorrections = 10;
+  bool _correctionExpired = false;
+  Timer? _correctionExpiryTimer;
 
   @override
   void initState() {
@@ -274,6 +278,7 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList> {
 
   @override
   void dispose() {
+    _correctionExpiryTimer?.cancel();
     _extentRegistry.removeListener(_onExtentsChanged);
     _scrollController.removeListener(_onScroll);
     widget.itemScrollController?.detach();
@@ -290,6 +295,13 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList> {
     widget.itemScrollController?.jumpTo(index: _targetInitialIndex!);
     _initialScrollApplied = true;
     _onScroll();
+    // Expire initial-position corrections after a short window so that
+    // late-arriving image extents do not yank the user back to the
+    // initial scroll index while they are actively scrolling.
+    _correctionExpiryTimer?.cancel();
+    _correctionExpiryTimer = Timer(const Duration(seconds: 2), () {
+      _correctionExpired = true;
+    });
   }
 
   void _onExtentsChanged() {
@@ -297,17 +309,26 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList> {
       _applyInitialScroll();
     } else if (_initialScrollApplied &&
         _targetInitialIndex != null &&
+        !_correctionExpired &&
         _extentCorrectionCount < _maxExtentCorrections) {
-      _extentCorrectionCount++;
       if (_scrollController.hasClients && mounted) {
+        final position = _scrollController.position;
         final targetOffset = _extentRegistry
             .offsetForIndex(_targetInitialIndex!)
-            .clamp(0.0, _scrollController.position.maxScrollExtent);
-        final currentOffset = _scrollController.position.pixels;
-        if ((currentOffset - targetOffset).abs() > 1.0) {
+            .clamp(0.0, position.maxScrollExtent);
+        final currentOffset = position.pixels;
+        final delta = (currentOffset - targetOffset).abs();
+        // Only correct small drift caused by late-arriving extents.
+        // If the user has scrolled far from the initial target, cancel
+        // corrections entirely to avoid yanking them back.
+        if (delta > position.viewportDimension) {
+          _targetInitialIndex = null;
+          _extentCorrectionCount = _maxExtentCorrections;
+        } else if (delta > 1.0) {
           _scrollController.jumpTo(targetOffset);
         }
       }
+      _extentCorrectionCount++;
       if (_extentCorrectionCount >= _maxExtentCorrections) {
         _targetInitialIndex = null;
       }
