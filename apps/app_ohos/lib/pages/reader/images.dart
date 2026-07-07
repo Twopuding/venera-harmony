@@ -1193,11 +1193,9 @@ class _ContinuousModeState extends State<_ContinuousMode>
     } else {
       target = photoViewController.getInitialScale!.call()! * 1.75;
     }
-    var size = MediaQuery.of(context).size;
-    photoViewController.animateScale?.call(
-      target,
-      Offset(size.width / 2 - location.dx, size.height / 2 - location.dy),
-    );
+    // stub 的 animateScale 内部会按 viewport/2 - location*scale 计算平移，
+    // 使 content 坐标 location 落在 viewport 中心。此处直接传 location 原始坐标。
+    photoViewController.animateScale?.call(target, location);
     onScaleUpdate(target);
   }
 
@@ -1207,17 +1205,13 @@ class _ContinuousModeState extends State<_ContinuousMode>
       return;
     }
     double target = photoViewController.getInitialScale!.call()! * 1.75;
-    var size = reader.size;
-    Offset zoomPosition;
     if (appdata.settings['longPressZoomPosition'] != 'center') {
-      zoomPosition = Offset(
-        size.width / 2 - location.dx,
-        size.height / 2 - location.dy,
-      );
+      // 同 handleDoubleTap：直接传 location 原始坐标，由 stub 内部计算居中平移。
+      photoViewController.animateScale?.call(target, location);
     } else {
-      zoomPosition = Offset(0, 0);
+      // 中心模式：不传位置，stub 走居中铺满分支。
+      photoViewController.animateScale?.call(target);
     }
-    photoViewController.animateScale?.call(target, zoomPosition);
     onScaleUpdate(target);
     isLongPressing = true;
   }
