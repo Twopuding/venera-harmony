@@ -1,6 +1,7 @@
-# sanitize-build-profile.ps1 - Sanitize/restore build-profile.json5 for safe GitHub push
+# sanitize-build-profile.ps1 - Local signing export + sanitize/restore for GitHub push
 # Usage:
 #   pwsh scripts/sanitize-build-profile.ps1 status
+#   pwsh scripts/sanitize-build-profile.ps1 save-local
 #   pwsh scripts/sanitize-build-profile.ps1 sanitize
 #   pwsh scripts/sanitize-build-profile.ps1 restore
 #   pwsh scripts/sanitize-build-profile.ps1 verify
@@ -8,7 +9,7 @@
 
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('status', 'sanitize', 'restore', 'verify', 'cleanup')]
+    [ValidateSet('status', 'save-local', 'sanitize', 'restore', 'verify', 'cleanup')]
     [string]$Action = 'status',
 
     [switch]$Force
@@ -18,6 +19,7 @@ $ErrorActionPreference = 'Stop'
 
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $BuildProfile = Join-Path $ProjectRoot 'apps/app_ohos/ohos/build-profile.json5'
+$LocalFile = "$BuildProfile.local"
 $BackupFile = "$BuildProfile.local.bak"
 $ChecksumFile = "$BackupFile.sha256"
 
@@ -47,11 +49,18 @@ function Test-LooksRealSigning([string]$Content) {
            ($Content -match '"keyPassword"\s*:\s*"[0-9A-F]{32,}"')
 }
 
+function Test-LooksEmptySigning([string]$Content) {
+    return $Content -match '"signingConfigs"\s*:\s*\[\s*\]'
+}
+
 function Show-Status {
     Write-Host "build-profile: $BuildProfile"
     if (Test-Path $BuildProfile) {
         $content = Get-Content -Raw $BuildProfile
-        if (Test-LooksSanitized $content) {
+        if (Test-LooksEmptySigning $content) {
+            Write-Host '  state: EXTERNAL (signingConfigs empty; expect .local inject)'
+        }
+        elseif (Test-LooksSanitized $content) {
             Write-Host '  state: SANITIZED (placeholders present)'
         }
         elseif (Test-LooksRealSigning $content) {
@@ -63,6 +72,19 @@ function Show-Status {
     }
     else {
         Write-Host '  state: MISSING'
+    }
+
+    if (Test-Path $LocalFile) {
+        $localContent = Get-Content -Raw $LocalFile
+        if (Test-LooksRealSigning $localContent) {
+            Write-Host "  local: present REAL ($LocalFile)"
+        }
+        else {
+            Write-Host "  local: present but signing looks unusual ($LocalFile)"
+        }
+    }
+    else {
+        Write-Host '  local: none (run save-local after configuring DevEco signing)'
     }
 
     if (Test-Path $BackupFile) {
@@ -79,6 +101,62 @@ function Show-Status {
     }
 }
 
+function Invoke-SaveLocal {
+    if ((Test-Path $LocalFile) -and -not $Force) {
+        throw "[save-local] ERROR: $LocalFile already exists. Use -Force to overwrite."
+    }
+
+    $forceArg = if ($Force) { '--force' } else { '' }
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $python) { $python = Get-Command python3 -ErrorAction SilentlyContinue }
+    if (-not $python) {
+        throw '[save-local] ERROR: python/python3 required to write pretty JSON (same as .sh script)'
+    }
+
+    $pyFile = Join-Path $env:TEMP "venera-save-local-signing.py"
+    $pyCode = @'
+import json, re, sys
+profile_path, local_path, force = sys.argv[1], sys.argv[2], sys.argv[3]
+with open(profile_path, encoding="utf-8") as f:
+    profile = json.load(f)
+configs = profile.get("app", {}).get("signingConfigs") or []
+if not configs:
+    print("[save-local] ERROR: signingConfigs is empty; configure signing in DevEco first", file=sys.stderr)
+    sys.exit(1)
+blob = json.dumps(configs)
+looks_real = bool(
+    re.search(r"\\.ohos\\", blob)
+    or re.search(r"/\.ohos/", blob)
+    or re.search(r'"keyPassword"\s*:\s*"[0-9A-F]{32,}"', blob)
+)
+if not looks_real and force != "--force":
+    print("[save-local] ERROR: signingConfigs do not look like real local credentials. Use -Force.", file=sys.stderr)
+    sys.exit(1)
+with open(local_path, "w", encoding="utf-8", newline="\n") as f:
+    json.dump({"signingConfigs": configs}, f, indent=2, ensure_ascii=False)
+    f.write("\n")
+profile["app"]["signingConfigs"] = []
+with open(profile_path, "w", encoding="utf-8", newline="\n") as f:
+    json.dump(profile, f, indent=2, ensure_ascii=False)
+    f.write("\n")
+print(f"[save-local] Wrote {local_path}")
+print("[save-local] Cleared signingConfigs in tracked build-profile.json5")
+print("[save-local] Build injects signing from .local via hvigorfile.ts")
+'@
+    $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::WriteAllText($pyFile, $pyCode, $utf8NoBom)
+
+    try {
+        & $python.Source $pyFile $BuildProfile $LocalFile $forceArg
+        if ($LASTEXITCODE -ne 0) {
+            throw "[save-local] ERROR: python exited with code $LASTEXITCODE"
+        }
+    }
+    finally {
+        Remove-Item -Path $pyFile -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Invoke-Sanitize {
     if (-not (Test-Path $BuildProfile)) {
         throw "[sanitize] ERROR: $BuildProfile not found"
@@ -90,8 +168,20 @@ function Invoke-Sanitize {
         throw "[sanitize] ERROR: backup already exists. Run restore first, or sanitize -Force."
     }
 
+    if ((Test-LooksEmptySigning $content) -and -not $Force) {
+        Write-Host '[sanitize] Tracked file already has empty signingConfigs; nothing to sanitize'
+        return
+    }
+
     if ((Test-LooksSanitized $content) -and -not $Force) {
         throw "[sanitize] ERROR: file already looks sanitized. Run restore first."
+    }
+
+    # Prefer persisting REAL signing to .local before stripping tracked file
+    if ((Test-LooksRealSigning $content) -and (-not (Test-Path $LocalFile) -or $Force)) {
+        Write-Host '[sanitize] Ensuring .local exists before sanitize...'
+        Invoke-SaveLocal
+        return
     }
 
     $tmpBackup = "$BackupFile.tmp"
@@ -117,38 +207,45 @@ function Invoke-Sanitize {
 }
 
 function Invoke-Restore {
-    if (-not (Test-Path $BackupFile)) {
-        throw "[restore] ERROR: no backup at $BackupFile"
+    if (Test-Path $BackupFile) {
+        if (Test-Path $ChecksumFile) {
+            Test-Checksum $BackupFile
+        }
+        else {
+            Write-Warning '[restore] checksum file missing; proceeding without verification'
+        }
+
+        $backupContent = Get-Content -Raw $BackupFile
+        if (Test-LooksSanitized $backupContent) {
+            throw '[restore] ERROR: backup contains sanitized placeholders. Refusing to restore — would overwrite local credentials.'
+        }
+
+        $tmpRestore = "$BuildProfile.restore.tmp"
+        Copy-Item -Path $BackupFile -Destination $tmpRestore -Force
+
+        if ($backupContent -notmatch '"certpath"|"storeFile"|"profile"') {
+            Remove-Item -Path $tmpRestore -Force -ErrorAction SilentlyContinue
+            throw '[restore] ERROR: backup does not look like a valid build-profile'
+        }
+
+        Move-Item -Path $tmpRestore -Destination $BuildProfile -Force
+
+        if (Test-Path $ChecksumFile) {
+            Test-Checksum $BuildProfile
+        }
+
+        Write-Host "[restore] Restored from backup (backup kept at $BackupFile)"
+        Write-Host "[restore] Run verify, then cleanup to remove backup files"
+        return
     }
 
-    if (Test-Path $ChecksumFile) {
-        Test-Checksum $BackupFile
-    }
-    else {
-        Write-Warning '[restore] checksum file missing; proceeding without verification'
-    }
-
-    $backupContent = Get-Content -Raw $BackupFile
-    if (Test-LooksSanitized $backupContent) {
-        throw '[restore] ERROR: backup contains sanitized placeholders. Refusing to restore — would overwrite local credentials.'
+    if (Test-Path $LocalFile) {
+        Write-Host '[restore] No .local.bak; tracked file stays EXTERNAL — signing comes from .local at build time'
+        Write-Host "[restore] local present: $LocalFile"
+        return
     }
 
-    $tmpRestore = "$BuildProfile.restore.tmp"
-    Copy-Item -Path $BackupFile -Destination $tmpRestore -Force
-
-    if ($backupContent -notmatch '"certpath"|"storeFile"|"profile"') {
-        Remove-Item -Path $tmpRestore -Force -ErrorAction SilentlyContinue
-        throw '[restore] ERROR: backup does not look like a valid build-profile'
-    }
-
-    Move-Item -Path $tmpRestore -Destination $BuildProfile -Force
-
-    if (Test-Path $ChecksumFile) {
-        Test-Checksum $BuildProfile
-    }
-
-    Write-Host "[restore] Restored from backup (backup kept at $BackupFile)"
-    Write-Host "[restore] Run verify, then cleanup to remove backup files"
+    throw "[restore] ERROR: no backup at $BackupFile and no $LocalFile"
 }
 
 function Invoke-Verify {
@@ -157,6 +254,17 @@ function Invoke-Verify {
     }
 
     $content = Get-Content -Raw $BuildProfile
+
+    # Preferred setup: empty tracked signing + REAL .local
+    if ((Test-LooksEmptySigning $content) -and (Test-Path $LocalFile)) {
+        $localContent = Get-Content -Raw $LocalFile
+        if (-not (Test-LooksRealSigning $localContent)) {
+            throw '[verify] FAIL: .local exists but signing fields look unusual'
+        }
+        Write-Host '[verify] OK: EXTERNAL tracked profile + REAL .local'
+        return
+    }
+
     if (Test-LooksSanitized $content) {
         throw '[verify] FAIL: file is still sanitized'
     }
@@ -187,15 +295,19 @@ function Invoke-Cleanup {
     }
 
     if (Test-Path $ChecksumFile) {
-        Test-Checksum $BuildProfile
+        # Only checksum-compare when tracked file was restored from bak (REAL in tracked file)
+        if (-not (Test-LooksEmptySigning $content)) {
+            Test-Checksum $BuildProfile
+        }
     }
 
     Remove-Item -Path $BackupFile, $ChecksumFile -Force -ErrorAction SilentlyContinue
-    Write-Host '[cleanup] Backup removed'
+    Write-Host '[cleanup] Backup removed (.local kept if present)'
 }
 
 switch ($Action) {
     'status' { Show-Status }
+    'save-local' { Invoke-SaveLocal }
     'sanitize' { Invoke-Sanitize }
     'restore' { Invoke-Restore }
     'verify' { Invoke-Verify }

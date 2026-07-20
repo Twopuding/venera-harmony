@@ -1,20 +1,6 @@
 {
   "app": {
-    "signingConfigs": [
-      {
-        "name": "default",
-        "type": "HarmonyOS",
-        "material": {
-          "certpath": "~/.ohos/config/your_cert.cer",
-          "keyAlias": "your_key_alias",
-          "keyPassword": "",
-          "profile": "~/.ohos/config/your_profile.p7b",
-          "signAlg": "SHA256withECDSA",
-          "storeFile": "~/.ohos/config/your_store.p12",
-          "storePassword": ""
-        }
-      }
-    ],
+    "signingConfigs": [],
     "products": [
       {
         "name": "default",
