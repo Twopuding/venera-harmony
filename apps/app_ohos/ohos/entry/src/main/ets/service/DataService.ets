@@ -29,6 +29,7 @@ export interface ExploreLoadResult {
 
 export interface ExplorePageSource {
   title: string;
+  displayTitle?: string;
   sourceKey: string;
 }
 
@@ -199,6 +200,7 @@ export interface ComicSourceAccountConfig {
   registerWebsite?: string;
   hasPasswordLogin?: boolean;
   hasCookieLogin?: boolean;
+  hasCheckLoginStatus?: boolean;
   cookieFields?: string[];
   infoItems?: AccountInfoItemData[];
 }
@@ -210,6 +212,23 @@ export interface CatalogEntry {
   description?: string;
   fileName?: string;
   url?: string;
+}
+
+export interface CatalogFetchResult {
+  entries?: CatalogEntry[];
+  error?: string;
+}
+
+export interface ComicArchiveInfo {
+  id: string;
+  title: string;
+  description: string;
+}
+
+export interface ComicArchivesResult {
+  hasArchive?: boolean;
+  archives?: ComicArchiveInfo[];
+  error?: string;
 }
 
 export interface BackendPingResult {
@@ -858,6 +877,27 @@ export class DataService {
     return parsed?.ok === true;
   }
 
+  async getComicArchives(sourceKey: string, id: string): Promise<ComicArchivesResult> {
+    let raw: Object | null = await this.bridge.getComicArchives(sourceKey, id);
+    let parsed = this.parseJson<ComicArchivesResult>(raw);
+    return parsed ?? { hasArchive: false };
+  }
+
+  async downloadComicArchive(
+    sourceKey: string,
+    id: string,
+    archiveId: string
+  ): Promise<string | null> {
+    let raw: Object | null =
+      await this.bridge.downloadComicArchive(sourceKey, id, archiveId);
+    let parsed = this.parseJson<ErrorResult>(raw);
+    if (parsed?.error !== undefined) {
+      return parsed.error;
+    }
+    let ok = this.parseJson<OkResult>(raw);
+    return ok?.ok === true ? null : 'Failed';
+  }
+
   async importComicFromPath(path: string): Promise<string | null> {
     let raw: Object | null = await this.bridge.importComicFromPath(path);
     let parsed = this.parseJson<ErrorResult>(raw);
@@ -1107,6 +1147,17 @@ export class DataService {
     return null;
   }
 
+  async comicSourceWebViewLoginCheck(
+    sourceKey: string,
+    url: string,
+    title: string
+  ): Promise<boolean> {
+    let raw: Object | null =
+      await this.bridge.comicSourceWebViewLoginCheck(sourceKey, url, title);
+    let parsed = this.parseJson<OkResult>(raw);
+    return parsed?.ok === true;
+  }
+
   async invokeComicSourceCallback(sourceKey: string, settingKey: string): Promise<string | null> {
     let raw: Object | null = await this.bridge.invokeComicSourceCallback(sourceKey, settingKey);
     let parsed = this.parseJson<ErrorResult>(raw);
@@ -1123,12 +1174,23 @@ export class DataService {
   }
 
   async fetchComicSourceCatalog(url: string): Promise<CatalogEntry[]> {
+    let result = await this.fetchComicSourceCatalogResult(url);
+    return result.entries ?? [];
+  }
+
+  async fetchComicSourceCatalogResult(url: string): Promise<CatalogFetchResult> {
+    if (url.trim().length === 0) {
+      return { entries: [] };
+    }
     let raw: Object | null = await this.bridge.fetchComicSourceCatalog(url);
     let parsed = this.parseJson<CatalogResponse>(raw);
-    if (parsed?.error !== undefined) {
-      return [];
+    if (parsed === null) {
+      return { error: 'Network error', entries: [] };
     }
-    return parsed?.entries ?? [];
+    if (parsed.error !== undefined && parsed.error.length > 0) {
+      return { error: parsed.error, entries: [] };
+    }
+    return { entries: parsed.entries ?? [] };
   }
 
   async getComicTileStatuses(): Promise<ComicTileStatusData> {
@@ -1284,6 +1346,7 @@ interface ComicDetailJson extends ComicJson {
   isLiked?: boolean;
   likesCount?: number;
   recommend?: ComicJson[];
+  hasArchiveDownloader?: boolean;
 }
 
 interface FoldersResponse {

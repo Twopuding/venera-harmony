@@ -253,6 +253,18 @@ class DataBridge {
             DataBridge.notifyDataEvent('download');
           }
           return downloadResult;
+        case 'getComicArchives':
+          return await DataService.getComicArchives(
+            call.arguments as Map<dynamic, dynamic>,
+          );
+        case 'downloadComicArchive':
+          final archiveResult = await DataService.downloadComicArchive(
+            call.arguments as Map<dynamic, dynamic>,
+          );
+          if (archiveResult['ok'] == true) {
+            DataBridge.notifyDataEvent('download');
+          }
+          return archiveResult;
         case 'importComicFromPath':
           return await DataService.importComicFromPath(
             call.arguments as Map<dynamic, dynamic>,
@@ -287,6 +299,10 @@ class DataBridge {
           );
         case 'comicSourceRelogin':
           return await DataService.comicSourceRelogin(
+            call.arguments as Map<dynamic, dynamic>,
+          );
+        case 'comicSourceWebViewLoginCheck':
+          return await DataService.comicSourceWebViewLoginCheck(
             call.arguments as Map<dynamic, dynamic>,
           );
         case 'invokeComicSourceCallback':

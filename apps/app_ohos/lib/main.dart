@@ -44,6 +44,7 @@ void main(List<String> args) {
       if (App.isOhos && appdata.settings['useNativeUi'] != false) {
         await NativeUiBootstrap.registerWebViewHandlers();
         await NativeUiBootstrap.registerReaderHandlers();
+        checkUpdates();
         runApp(const Material(
           color: Colors.transparent,
           child: SizedBox.shrink(),

@@ -23,6 +23,7 @@ import 'package:venera/utils/data.dart';
 import 'package:venera/utils/tags_translation.dart';
 import 'package:venera/utils/import_comic.dart';
 import 'package:venera/foundation/log.dart';
+import 'package:venera/utils/translations.dart';
 import 'package:yaml/yaml.dart';
 
 /// UI-free data operations for ArkTS DataBridge handlers.
@@ -80,6 +81,8 @@ class DataService {
       'sourceKey': details.sourceKey,
       'chapters': details.chapters?.toJson(),
       'recommend': details.recommend?.map(comicToJson).toList(),
+      'hasArchiveDownloader':
+          ComicSource.find(details.sourceKey)?.archiveDownloader != null,
     };
   }
 
@@ -364,7 +367,11 @@ class DataService {
     for (final title in pages) {
       for (final source in ComicSource.all()) {
         if (source.explorePages.any((p) => p.title == title)) {
-          pageSources.add({'title': title, 'sourceKey': source.key});
+          pageSources.add({
+            'title': title,
+            'displayTitle': title.ts(source.key),
+            'sourceKey': source.key,
+          });
           break;
         }
       }
@@ -385,9 +392,10 @@ class DataService {
     for (final key in categories) {
       for (final source in ComicSource.all()) {
         if (source.categoryData?.key == key) {
+          final title = source.categoryData!.title;
           categoryMeta.add({
             'key': key,
-            'title': source.categoryData!.title,
+            'title': title.ts(source.key),
             'sourceKey': source.key,
           });
           break;
@@ -1540,6 +1548,61 @@ class DataService {
     return {'ok': true, 'title': comicMap['title']};
   }
 
+  static Future<Map<String, dynamic>> getComicArchives(
+    Map<dynamic, dynamic> args,
+  ) async {
+    final sourceKey = args['sourceKey']?.toString() ?? '';
+    final id = args['id']?.toString() ?? '';
+    final source = ComicSource.find(sourceKey);
+    final downloader = source?.archiveDownloader;
+    if (downloader == null) {
+      return {'error': 'Archive not available', 'hasArchive': false};
+    }
+    final res = await downloader.getArchives(id);
+    if (res.error) {
+      return {'error': res.errorMessage, 'hasArchive': true};
+    }
+    return {
+      'hasArchive': true,
+      'archives': res.data
+          .map((e) => {
+                'id': e.id,
+                'title': e.title,
+                'description': e.description,
+              })
+          .toList(),
+    };
+  }
+
+  static Future<Map<String, dynamic>> downloadComicArchive(
+    Map<dynamic, dynamic> args,
+  ) async {
+    final sourceKey = args['sourceKey']?.toString() ?? '';
+    final id = args['id']?.toString() ?? '';
+    final archiveId = args['archiveId']?.toString() ?? '';
+    final source = ComicSource.find(sourceKey);
+    final downloader = source?.archiveDownloader;
+    if (downloader == null) {
+      return {'error': 'Archive not available'};
+    }
+    if (LocalManager().isDownloading(id, ComicType.fromKey(sourceKey))) {
+      return {'error': 'Already downloading'};
+    }
+    final detailsRes = await source!.loadComicInfo!(id);
+    if (detailsRes.error) {
+      return {'error': detailsRes.errorMessage};
+    }
+    final urlRes = await downloader.getDownloadUrl(id, archiveId);
+    if (urlRes.error) {
+      return {'error': urlRes.errorMessage};
+    }
+    if (urlRes.data.isEmpty) {
+      return {'error': 'Empty download url'};
+    }
+    LocalManager().addTask(ArchiveDownloadTask(urlRes.data, detailsRes.data));
+    return {'ok': true};
+  }
+
   static Future<Map<String, dynamic>> importComicFromPath(
     Map<dynamic, dynamic> args,
   ) async {
@@ -1633,26 +1696,33 @@ class DataService {
       final key = entry.key;
       final meta = Map<String, dynamic>.from(entry.value as Map);
       final type = meta['type']?.toString() ?? '';
+      final title = (meta['title']?.toString() ?? key).ts(sourceKey);
       final item = <String, dynamic>{
         'key': key,
         'type': type,
-        'title': meta['title'],
+        'title': title,
         'default': meta['default'],
         'current': source.data['settings'][key] ?? meta['default'],
       };
       if (type == 'select' && meta['options'] is List) {
         item['options'] = (meta['options'] as List)
-            .map((o) => {
-                  'value': (o as Map)['value'],
-                  'text': o['text'] ?? o['value'],
-                })
+            .map((o) {
+              final map = o as Map;
+              final value = map['value'];
+              final text = (map['text'] ?? map['value']).toString();
+              return {
+                'value': value,
+                'text': text.ts(sourceKey),
+              };
+            })
             .toList();
       }
       if (type == 'input') {
         item['validator'] = meta['validator'];
       }
       if (type == 'callback') {
-        item['buttonText'] = meta['buttonText'] ?? 'Click';
+        item['buttonText'] =
+            (meta['buttonText']?.toString() ?? 'Click').ts(sourceKey);
       }
       items.add(item);
     }
@@ -1724,9 +1794,38 @@ class DataService {
       'registerWebsite': account.registerWebsite,
       'hasPasswordLogin': account.login != null,
       'hasCookieLogin': account.validateCookies != null,
+      'hasCheckLoginStatus': account.checkLoginStatus != null,
       'cookieFields': account.cookieFields ?? <String>[],
       'infoItems': infoItems,
     };
+  }
+
+  static Future<Map<String, dynamic>> comicSourceWebViewLoginCheck(
+    Map<dynamic, dynamic> args,
+  ) async {
+    final sourceKey = args['sourceKey']?.toString() ?? '';
+    final url = args['url']?.toString() ?? '';
+    final title = args['title']?.toString() ?? '';
+    final source = ComicSource.find(sourceKey);
+    if (source?.account == null) {
+      return {'ok': false, 'matched': false};
+    }
+    final check = source!.account!.checkLoginStatus;
+    if (check == null) {
+      return {'ok': false, 'matched': false, 'error': 'No checkLoginStatus'};
+    }
+    if (!check(url, title)) {
+      return {'ok': false, 'matched': false};
+    }
+    source.data['account'] = 'ok';
+    await source.saveData();
+    try {
+      source.account!.onLoginWithWebviewSuccess?.call();
+    } catch (e, s) {
+      Log.error('comicSourceWebViewLoginCheck', e.toString(), s);
+    }
+    ComicSourceManager().notifyStateChange();
+    return {'ok': true, 'matched': true, 'isLogged': source.isLogged};
   }
 
   static Future<Map<String, dynamic>> comicSourceLogin(

@@ -10,7 +10,11 @@ import { RouterUtil } from '../navigation/RouterUtil';
 import { TranslationUtil } from '../utils/TranslationUtil';
 import { ImmersivePageScaffold } from '../components/ImmersivePageScaffold';
 import { ImmersiveScrollTopInset } from '../components/ImmersiveScrollTopInset';
-import { SettingTile } from '../components/SettingsList';
+import {
+  ActionSettingTile,
+  SettingTile
+} from '../components/SettingsList';
+import { HdsTheme } from '../design/HdsTheme';
 import { PlatformUtil } from '../utils/PlatformUtil';
 import { COMIC_SOURCE_HELP_URL } from '../utils/SettingsConstants';
 import { common } from '@kit.AbilityKit';
@@ -48,6 +52,10 @@ struct ComicSourcePage {
 
   aboutToAppear(): void {
     TranslationUtil.ensureLoaded(this.context);
+    this.loadSources();
+  }
+
+  onPageShow(): void {
     this.loadSources();
   }
 
@@ -152,6 +160,18 @@ struct ComicSourcePage {
     this.deleteSourceKey = source.key;
     this.deleteSourceName = source.name;
     this.showDeleteDialog = true;
+  }
+
+  private async handleLoginAction(source: ComicSourceInfo): Promise<void> {
+    if (source.isLogged === true) {
+      let error = await DataService.getInstance().comicSourceRelogin(source.key);
+      if (error === null) {
+        await this.loadSources();
+        promptAction.showToast({ message: this.tl('Success') });
+        return;
+      }
+    }
+    RouterUtil.openComicSourceLogin(source.key, source.name);
   }
 
   private async removeSource(): Promise<void> {
@@ -314,10 +334,11 @@ struct ComicSourcePage {
             Text(source.name)
               .fontSize(16)
               .fontWeight(FontWeight.Medium)
+              .fontColor($r('sys.color.font_primary'))
             if (source.version !== undefined && source.version.length > 0) {
               Text(source.version)
                 .fontSize(12)
-                .fontColor($r('app.color.text_secondary'))
+                .fontColor($r('sys.color.font_secondary'))
                 .padding({ left: 8, right: 8, top: 2, bottom: 2 })
                 .margin({ left: 6 })
                 .borderRadius(8)
@@ -326,7 +347,7 @@ struct ComicSourcePage {
             if (source.hasUpdate === true) {
               Text(this.tl('New Version'))
                 .fontSize(11)
-                .fontColor($r('app.color.color_emphasize'))
+                .fontColor($r('sys.color.font_emphasize'))
                 .padding({ left: 6, right: 6, top: 2, bottom: 2 })
                 .margin({ left: 4 })
                 .borderRadius(8)
@@ -335,169 +356,167 @@ struct ComicSourcePage {
           }
           Text(source.key)
             .fontSize(12)
-            .fontColor($r('app.color.text_secondary'))
+            .fontColor($r('sys.color.font_secondary'))
             .margin({ top: 4 })
         }
         .alignItems(HorizontalAlign.Start)
         .layoutWeight(1)
-
-        Button(this.tl('Settings'))
-          .height(32)
-          .fontSize(12)
-          .margin({ right: 4 })
-          .onClick(() => this.openSourceSettings(source.key))
-        Button(this.tl('Edit'))
-          .height(32)
-          .fontSize(12)
-          .margin({ right: 4 })
-          .onClick(() => RouterUtil.openComicSourceEdit(source.key))
-        Button(this.tl('Update'))
-          .height(32)
-          .fontSize(12)
-          .margin({ right: 4 })
-          .onClick(async () => {
-            let ok = await DataService.getInstance().updateComicSource(source.key);
-            if (ok) {
-              await this.loadSources();
-              promptAction.showToast({ message: this.tl('Updated') });
-            } else {
-              promptAction.showToast({ message: this.tl('Failed') });
-            }
-          })
-        Button(this.tl('Delete'))
-          .height(32)
-          .fontSize(12)
-          .backgroundColor($r('app.color.badge_bg'))
-          .onClick(() => this.confirmDelete(source))
       }
       .width('100%')
+      .padding({ left: 16, right: 16, top: 12, bottom: 8 })
+
+      ActionSettingTile({
+        title: this.tl('Settings'),
+        actionLabel: '',
+        onAction: () => this.openSourceSettings(source.key)
+      })
+      ActionSettingTile({
+        title: this.tl('Edit'),
+        actionLabel: '',
+        onAction: () => RouterUtil.openComicSourceEdit(source.key)
+      })
+      ActionSettingTile({
+        title: this.tl('Update'),
+        actionLabel: '',
+        onAction: () => this.updateSingleSource(source.key)
+      })
+      ActionSettingTile({
+        title: this.tl('Delete'),
+        actionLabel: '',
+        showDivider: source.hasAccount === true,
+        onAction: () => this.confirmDelete(source)
+      })
 
       if (source.hasAccount === true) {
-        Divider().margin({ top: 12, bottom: 4 })
         if (source.isLogged === true) {
-          Text(this.tl('Logged in'))
-            .fontSize(14)
-            .fontColor($r('app.color.color_emphasize'))
-            .width('100%')
+          SettingTile({
+            title: this.tl('Logged in'),
+            showDivider: true
+          })
         }
         SettingTile({
           title: source.isLogged === true ? this.tl('Re-login') : this.tl('Log in'),
           subtitle: this.tl('Click if login expired'),
-          showDivider: false,
-          trailing: () => {
-            Button(this.tl('Open'))
-              .height(32)
-              .fontSize(12)
-              .onClick(() => RouterUtil.openComicSourceLogin(source.key, source.name))
-          },
-          onTap: () => RouterUtil.openComicSourceLogin(source.key, source.name)
+          showDivider: source.isLogged === true,
+          onTap: () => this.handleLoginAction(source)
         })
         if (source.isLogged === true) {
           SettingTile({
             title: this.tl('Log out'),
             showDivider: false,
-            onTap: async () => {
-              await DataService.getInstance().comicSourceLogout(source.key);
-              await this.loadSources();
-            }
+            onTap: () => this.logoutSource(source.key)
           })
         }
       }
     }
     .width('100%')
-    .padding(16)
-    .margin({ left: 16, right: 16, bottom: 8 })
     .backgroundColor($r('app.color.card_background'))
-    .borderRadius(12)
+    .borderRadius(20)
+    .margin({ bottom: 12 })
+  }
+
+  private async updateSingleSource(key: string): Promise<void> {
+    let ok = await DataService.getInstance().updateComicSource(key);
+    if (ok) {
+      await this.loadSources();
+      promptAction.showToast({ message: this.tl('Updated') });
+    } else {
+      promptAction.showToast({ message: this.tl('Failed') });
+    }
+  }
+
+  private async logoutSource(key: string): Promise<void> {
+    await DataService.getInstance().comicSourceLogout(key);
+    await this.loadSources();
+  }
+
+  @Builder
+  addSourceSection() {
+    Column() {
+      Row() {
+        SymbolGlyph($r('sys.symbol.square_grid_2x2'))
+          .fontSize(20)
+          .fontColor([$r('sys.color.icon_primary')])
+        Text(this.tl('Add comic source'))
+          .fontSize(16)
+          .fontWeight(FontWeight.Medium)
+          .fontColor($r('sys.color.font_primary'))
+          .margin({ left: 8 })
+      }
+      .width('100%')
+      .padding({ left: 16, right: 16, top: 12 })
+      .margin({ bottom: 8 })
+
+      TextInput({ placeholder: this.tl('Source URL'), text: this.sourceUrl })
+        .width('100%')
+        .padding({ left: 16, right: 16 })
+        .enabled(!this.isAdding && !this.isBatchUpdating)
+        .onChange((v: string) => { this.sourceUrl = v; })
+        .onSubmit(() => this.addFromUrl())
+
+      ActionSettingTile({
+        title: this.tl('Comic Source list'),
+        actionLabel: '',
+        onAction: () => RouterUtil.openComicSourceList()
+      })
+      ActionSettingTile({
+        title: this.tl('Use a config file'),
+        actionLabel: '',
+        onAction: () => this.importFromFile()
+      })
+      ActionSettingTile({
+        title: this.tl('Help'),
+        actionLabel: this.tl('Open'),
+        onAction: () => RouterUtil.launchUrl(COMIC_SOURCE_HELP_URL)
+      })
+      ActionSettingTile({
+        title: this.tl('Check Updates'),
+        actionLabel: '',
+        showDivider: false,
+        onAction: () => this.checkUpdates()
+      })
+
+      Button(this.tl('Add'))
+        .width('100%')
+        .margin({ left: 16, right: 16, top: 8, bottom: 16 })
+        .enabled(!this.isAdding && !this.isBatchUpdating)
+        .onClick(() => this.addFromUrl())
+
+      if (this.isAdding || this.isBatchUpdating) {
+        Row() {
+          LoadingProgress().width(20).height(20)
+          Text(this.isBatchUpdating ? this.tl('Updating') : this.tl('Loading...'))
+            .fontSize(12)
+            .margin({ left: 8 })
+        }
+        .padding({ left: 16, bottom: 12 })
+      }
+
+      if (this.statusMessage.length > 0) {
+        Text(this.statusMessage)
+          .fontSize(12)
+          .fontColor($r('sys.color.font_secondary'))
+          .padding({ left: 16, right: 16, bottom: 12 })
+      }
+    }
+    .width('100%')
+    .backgroundColor($r('app.color.card_background'))
+    .borderRadius(20)
+    .margin({ bottom: 8 })
   }
 
   @Builder
   pageContent() {
     Scroll(this.scroller) {
-      Column() {
-        ImmersiveScrollTopInset()
-        Column() {
-          Row() {
-            SymbolGlyph($r('sys.symbol.square_grid_2x2'))
-              .fontSize(20)
-            Text(this.tl('Add comic source'))
-              .fontSize(16)
-              .fontWeight(FontWeight.Medium)
-              .margin({ left: 8 })
-          }
-          .width('100%')
-          .margin({ bottom: 8 })
-
-          TextInput({ placeholder: this.tl('Source URL'), text: this.sourceUrl })
-            .width('100%')
-            .enabled(!this.isAdding && !this.isBatchUpdating)
-            .onChange((v: string) => { this.sourceUrl = v; })
-            .onSubmit(() => this.addFromUrl())
-
-          Row({ space: 8 }) {
-            Button(this.tl('Comic Source list'))
-              .layoutWeight(1)
-              .fontSize(12)
-              .onClick(() => RouterUtil.openComicSourceList())
-            Button(this.tl('Use a config file'))
-              .layoutWeight(1)
-              .fontSize(12)
-              .onClick(() => this.importFromFile())
-          }
-          .width('100%')
-          .margin({ top: 8 })
-
-          Row({ space: 8 }) {
-            Button(this.tl('Help'))
-              .layoutWeight(1)
-              .fontSize(12)
-              .onClick(() => RouterUtil.launchUrl(COMIC_SOURCE_HELP_URL))
-            Button(this.tl('Check Updates'))
-              .layoutWeight(1)
-              .fontSize(12)
-              .enabled(!this.isBatchUpdating)
-              .onClick(() => this.checkUpdates())
-          }
-          .width('100%')
-          .margin({ top: 8 })
-
-          Row({ space: 8 }) {
-            Button(this.tl('Add'))
-              .layoutWeight(1)
-              .enabled(!this.isAdding && !this.isBatchUpdating)
-              .onClick(() => this.addFromUrl())
-          }
-          .width('100%')
-          .margin({ top: 8 })
-
-          if (this.isAdding || this.isBatchUpdating) {
-            Row() {
-              LoadingProgress().width(20).height(20)
-              Text(this.isBatchUpdating ? this.tl('Updating') : this.tl('Loading...'))
-                .fontSize(12)
-                .margin({ left: 8 })
-            }
-            .margin({ top: 8 })
-          }
-
-          if (this.statusMessage.length > 0) {
-            Text(this.statusMessage)
-              .fontSize(12)
-              .fontColor($r('app.color.text_secondary'))
-              .margin({ top: 8 })
-          }
-        }
-        .width('100%')
-        .padding(16)
-        .margin({ bottom: 8 })
-        .backgroundColor($r('app.color.card_background'))
-        .borderRadius(12)
+      Column({ space: 8 }) {
+        ImmersiveScrollTopInset({ titleMode: HdsTheme.SETTINGS_SUBPAGE_TITLE_MODE })
+        this.addSourceSection()
 
         if (this.isLoading) {
           LoadingIndicator()
         } else if (this.sources.length === 0) {
           Text(this.tl('No comic sources installed'))
-            .fontColor($r('app.color.text_secondary'))
+            .fontColor($r('sys.color.font_secondary'))
             .padding(24)
         } else {
           ForEach(this.sources, (source: ComicSourceInfo) => {
@@ -508,12 +527,17 @@ struct ComicSourcePage {
       .width('100%')
       .padding({ bottom: 24 })
     }
+    .width('100%')
+    .height('100%')
+    .scrollBar(BarState.Off)
+    .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
   }
 
   build() {
     Stack() {
       ImmersivePageScaffold({
         title: this.tl('Comic Source'),
+        titleMode: HdsTheme.SETTINGS_SUBPAGE_TITLE_MODE,
         showBack: true,
         scrollable: false,
         pageScroller: this.scroller,

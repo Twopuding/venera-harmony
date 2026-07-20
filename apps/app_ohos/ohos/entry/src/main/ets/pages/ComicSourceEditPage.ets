@@ -5,6 +5,7 @@ import { NavigationMenus } from '../navigation/NavigationMenus';
 import { RouterUtil } from '../navigation/RouterUtil';
 import { TranslationUtil } from '../utils/TranslationUtil';
 import { CodeEditor } from '../components/CodeEditor';
+import { HdsTheme } from '../design/HdsTheme';
 import promptAction from '@ohos.promptAction';
 
 @Entry
@@ -70,6 +71,7 @@ struct ComicSourceEditPage {
     Stack() {
       ImmersivePageScaffold({
         title: this.tl('Edit Script'),
+        titleMode: HdsTheme.SETTINGS_SUBPAGE_TITLE_MODE,
         showBack: true,
         scrollable: false,
         onBack: () => RouterUtil.back(),

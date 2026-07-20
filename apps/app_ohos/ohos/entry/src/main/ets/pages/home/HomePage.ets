@@ -583,8 +583,8 @@ export struct HomePage {
     }
     .width('100%')
     .margin({ left: 8, right: 8, top: 8, bottom: 8 })
-    .borderRadius(8)
-    .border({ width: 0.6, color: $r('app.color.card_border') })
+    .borderRadius(20)
+    .backgroundColor($r('app.color.card_background'))
   }
 
   build() {

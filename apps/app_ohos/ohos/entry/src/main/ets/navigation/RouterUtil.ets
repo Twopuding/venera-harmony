@@ -40,6 +40,7 @@ interface CommentsRouteParams {
 
 interface WebViewRouteParams {
   url: string;
+  loginSourceKey?: string;
 }
 
 interface CoverViewerRouteParams {
@@ -266,6 +267,11 @@ export class RouterUtil {
       let params: WebViewRouteParams = { url: url };
       RouterUtil.pushUrlTracked('pages/WebViewPage', params);
     }
+  }
+
+  static openComicSourceWebViewLogin(url: string, sourceKey: string): void {
+    let params: WebViewRouteParams = { url: url, loginSourceKey: sourceKey };
+    RouterUtil.pushUrlTracked('pages/WebViewPage', params);
   }
 
   static launchUrl(url: string): void {

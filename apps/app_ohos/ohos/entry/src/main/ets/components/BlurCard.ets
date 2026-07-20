@@ -14,6 +14,7 @@ export struct BlurCard {
       this.content()
     }
     .width('100%')
+    .backgroundColor($r('app.color.card_background'))
     .borderRadius(this.cardRadius)
     .padding(this.cardPadding)
     .backgroundBlurStyle(this.useThickBlur ? HdsTheme.thickBlurStyle() : HdsTheme.cardBlurStyle())

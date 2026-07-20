@@ -246,7 +246,7 @@ export struct ExplorePage {
                     }
                   })
                 }
-                .tabBar(page.title)
+                .tabBar(page.displayTitle ?? page.title)
               }, (page: ExplorePageSource) => page.title + page.sourceKey)
             }
             .barMode(BarMode.Scrollable)

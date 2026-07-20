@@ -4,7 +4,8 @@ import {
   DataService,
   CommentInfo,
   CommentsLoadResult,
-  AddFavoriteRequest
+  AddFavoriteRequest,
+  ComicArchiveInfo
 } from '../../service/DataService';
 import { ComicCoverImage } from '../../components/ComicCoverImage';
 import { ComicGrid } from '../../components/ComicGrid';
@@ -46,6 +47,12 @@ struct ComicDetailPage {
   @State thumbnails: string[] = []
   @State showDownloadDialog: boolean = false
   @State selectedChapterIndices: number[] = []
+  @State hasArchiveDownloader: boolean = false
+  @State showArchiveDialog: boolean = false
+  @State archiveList: ComicArchiveInfo[] = []
+  @State archiveLoading: boolean = false
+  @State archiveDownloading: boolean = false
+  @State selectedArchiveIndex: number = -1
   @State inFavoriteFolder: string = ''
   @State recommendComics: Comic[] = []
   @State chapterModel: ComicChapters | null = null
@@ -87,6 +94,7 @@ struct ComicDetailPage {
       }
       this.isLiked = comicData.isLiked === true;
       this.canLike = comicData.isLiked !== undefined;
+      this.hasArchiveDownloader = comicData.hasArchiveDownloader === true;
       this.thumbnails = await DataService.getInstance().loadThumbnails(this.sourceKey, this.comicId);
       if (comicData.recommend !== undefined) {
         this.recommendComics = comicData.recommend.map((item) => {
@@ -184,6 +192,55 @@ struct ComicDetailPage {
   private async startDownload(): Promise<void> {
     let ok = await DataService.getInstance().startDownload(this.sourceKey, this.comicId);
     this.actionMessage = ok ? 'Download started' : 'Failed to start download';
+  }
+
+  private async openDownloadMenu(): Promise<void> {
+    if (this.hasArchiveDownloader) {
+      this.selectedArchiveIndex = -1;
+      this.archiveList = [];
+      this.showArchiveDialog = true;
+      this.archiveLoading = true;
+      let result = await DataService.getInstance().getComicArchives(this.sourceKey, this.comicId);
+      this.archiveLoading = false;
+      if (result.error !== undefined && result.error.length > 0) {
+        this.actionMessage = result.error;
+        this.showArchiveDialog = false;
+        return;
+      }
+      this.archiveList = result.archives ?? [];
+      return;
+    }
+    if (this.chapterIds.length > 1) {
+      this.openDownloadDialog();
+    } else {
+      await this.startDownload();
+    }
+  }
+
+  private async confirmArchiveDownload(): Promise<void> {
+    if (this.selectedArchiveIndex < 0) {
+      this.showArchiveDialog = false;
+      if (this.chapterIds.length > 1) {
+        this.openDownloadDialog();
+      } else {
+        await this.startDownload();
+      }
+      return;
+    }
+    if (this.archiveDownloading) {
+      return;
+    }
+    let archive = this.archiveList[this.selectedArchiveIndex];
+    if (archive === undefined) {
+      return;
+    }
+    this.archiveDownloading = true;
+    let error = await DataService.getInstance().downloadComicArchive(
+      this.sourceKey, this.comicId, archive.id
+    );
+    this.archiveDownloading = false;
+    this.showArchiveDialog = false;
+    this.actionMessage = error === null ? 'Download started' : error;
   }
 
   private async openFavoriteDialog(): Promise<void> {
@@ -350,6 +407,89 @@ struct ComicDetailPage {
   }
 
   @Builder
+  archiveDialogContent() {
+    Column() {
+      Row() {
+        Radio({ value: '-1', group: 'archive' })
+          .checked(this.selectedArchiveIndex === -1)
+          .onChange((checked: boolean) => {
+            if (checked) {
+              this.selectedArchiveIndex = -1;
+            }
+          })
+        Text(this.tr('Normal'))
+          .fontSize(14)
+          .margin({ left: 8 })
+      }
+      .width('100%')
+      .padding(8)
+      .onClick(() => {
+        this.selectedArchiveIndex = -1;
+      })
+
+      Text(this.tr('Archive'))
+        .fontSize(14)
+        .fontWeight(FontWeight.Medium)
+        .width('100%')
+        .padding({ left: 8, top: 8, bottom: 4 })
+
+      if (this.archiveLoading) {
+        LoadingProgress().width(24).height(24).margin(12)
+      } else if (this.archiveList.length === 0) {
+        Text(this.tr('Empty'))
+          .fontSize(12)
+          .fontColor($r('app.color.text_secondary'))
+          .padding(8)
+      } else {
+        ForEach(this.archiveList, (item: ComicArchiveInfo, index: number) => {
+          Row() {
+            Radio({ value: item.id, group: 'archive' })
+              .checked(this.selectedArchiveIndex === index)
+              .onChange((checked: boolean) => {
+                if (checked) {
+                  this.selectedArchiveIndex = index;
+                }
+              })
+            Column() {
+              Text(item.title)
+                .fontSize(14)
+              if (item.description.length > 0) {
+                Text(item.description)
+                  .fontSize(12)
+                  .fontColor($r('app.color.text_secondary'))
+                  .margin({ top: 2 })
+              }
+            }
+            .alignItems(HorizontalAlign.Start)
+            .margin({ left: 8 })
+            .layoutWeight(1)
+          }
+          .width('100%')
+          .padding(8)
+          .onClick(() => {
+            this.selectedArchiveIndex = index;
+          })
+        }, (item: ComicArchiveInfo) => item.id)
+      }
+    }
+  }
+
+  @Builder
+  archiveDialogActions() {
+    Row() {
+      Button(this.tr('Cancel'))
+        .backgroundColor(Color.Transparent)
+        .onClick(() => {
+          this.showArchiveDialog = false;
+        })
+      Button(this.tr('Download'))
+        .margin({ left: 8 })
+        .enabled(!this.archiveDownloading && !this.archiveLoading)
+        .onClick(() => this.confirmArchiveDownload())
+    }
+  }
+
+  @Builder
   downloadDialogActions() {
     Row() {
       Button('Cancel')
@@ -467,11 +607,7 @@ struct ComicDetailPage {
                   .layoutWeight(1)
                   .margin({ left: 8 })
                   .onClick(() => {
-                    if (this.chapterIds.length > 1) {
-                      this.openDownloadDialog();
-                    } else {
-                      this.startDownload();
-                    }
+                    this.openDownloadMenu();
                   })
                 if (this.inFavoriteFolder.length > 0) {
                   Button('Unfavorite')
@@ -697,6 +833,16 @@ struct ComicDetailPage {
         },
         content: this.downloadChapterList,
         actions: this.downloadDialogActions
+      })
+
+      ContentDialogCustom({
+        title: this.tr('Download'),
+        show: this.showArchiveDialog,
+        onClose: () => {
+          this.showArchiveDialog = false;
+        },
+        content: this.archiveDialogContent,
+        actions: this.archiveDialogActions
       })
     }
     .width('100%')

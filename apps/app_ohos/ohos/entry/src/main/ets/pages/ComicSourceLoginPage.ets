@@ -1,10 +1,13 @@
 import router from '@ohos.router';
 import {
+  AccountInfoItemData,
   ComicSourceAccountConfig,
   DataService
 } from '../service/DataService';
 import { ImmersivePageScaffold } from '../components/ImmersivePageScaffold';
 import { LoadingIndicator } from '../components/LoadingIndicator';
+import { SettingTile } from '../components/SettingsList';
+import { HdsTheme } from '../design/HdsTheme';
 import { RouterUtil } from '../navigation/RouterUtil';
 import { TranslationUtil } from '../utils/TranslationUtil';
 import promptAction from '@ohos.promptAction';
@@ -31,6 +34,10 @@ struct ComicSourceLoginPage {
     this.loadConfig();
   }
 
+  onPageShow(): void {
+    this.refreshLoginState();
+  }
+
   private tl(key: string): string {
     return TranslationUtil.tl(key, this.context);
   }
@@ -44,6 +51,17 @@ struct ComicSourceLoginPage {
       this.cookieValues.push('');
     }
     this.isLoading = false;
+  }
+
+  private async refreshLoginState(): Promise<void> {
+    if (this.sourceKey.length === 0) {
+      return;
+    }
+    let latest = await DataService.getInstance().getComicSourceAccountConfig(this.sourceKey);
+    this.config = latest;
+    if (latest.isLogged === true) {
+      RouterUtil.back();
+    }
   }
 
   private async submitLogin(): Promise<void> {
@@ -72,71 +90,108 @@ struct ComicSourceLoginPage {
     RouterUtil.back();
   }
 
+  private openWebViewLogin(): void {
+    let website = this.config.loginWebsite ?? '';
+    if (website.length === 0) {
+      return;
+    }
+    RouterUtil.openComicSourceWebViewLogin(website, this.sourceKey);
+  }
+
+  @Builder
+  infoItemsSection() {
+    if (this.config.infoItems !== undefined && this.config.infoItems.length > 0) {
+      Column() {
+        ForEach(this.config.infoItems, (item: AccountInfoItemData, index: number) => {
+          SettingTile({
+            title: item.title,
+            subtitle: item.data ?? '',
+            showDivider: index < (this.config.infoItems?.length ?? 0) - 1
+          })
+        }, (item: AccountInfoItemData, index: number) => `${item.title}_${index}`)
+      }
+      .width('100%')
+      .backgroundColor($r('app.color.card_background'))
+      .borderRadius(20)
+    }
+  }
+
+  @Builder
+  loginFormCard() {
+    Column() {
+      Text(this.tl('Login'))
+        .fontSize(20)
+        .fontWeight(FontWeight.Medium)
+        .margin({ bottom: 16 })
+
+      if (this.config.hasPasswordLogin === true) {
+        TextInput({ placeholder: this.tl('Username'), text: this.username })
+          .width('100%')
+          .margin({ bottom: 12 })
+          .onChange((v: string) => { this.username = v; })
+        TextInput({ placeholder: this.tl('Password'), text: this.password })
+          .width('100%')
+          .type(InputType.Password)
+          .margin({ bottom: 16 })
+          .onChange((v: string) => { this.password = v; })
+          .onSubmit(() => this.submitLogin())
+      }
+
+      if (this.config.hasCookieLogin === true && this.config.cookieFields !== undefined) {
+        ForEach(this.config.cookieFields, (field: string, index: number) => {
+          TextInput({ placeholder: field, text: this.cookieValues[index] ?? '' })
+            .width('100%')
+            .type(InputType.Password)
+            .margin({ bottom: 12 })
+            .onChange((v: string) => {
+              this.cookieValues[index] = v;
+            })
+        }, (field: string, index: number) => `${field}_${index}`)
+      }
+
+      if (this.config.hasPasswordLogin !== true && this.config.hasCookieLogin !== true) {
+        Text(this.tl('Login with password is disabled'))
+          .fontColor($r('sys.color.font_secondary'))
+      } else {
+        Button(this.tl('Continue'))
+          .width('100%')
+          .enabled(!this.isSubmitting)
+          .onClick(() => this.submitLogin())
+      }
+
+      if (this.config.loginWebsite !== undefined && this.config.loginWebsite.length > 0) {
+        Button(this.tl('Login with webview'))
+          .width('100%')
+          .margin({ top: 16 })
+          .type(ButtonType.Normal)
+          .onClick(() => this.openWebViewLogin())
+      }
+
+      if (this.config.registerWebsite !== undefined && this.config.registerWebsite.length > 0) {
+        Button(this.tl('Create Account'))
+          .width('100%')
+          .margin({ top: 8 })
+          .type(ButtonType.Normal)
+          .onClick(() => RouterUtil.launchUrl(this.config.registerWebsite!))
+      }
+    }
+    .width('100%')
+    .padding(16)
+    .backgroundColor($r('app.color.card_background'))
+    .borderRadius(20)
+  }
+
   @Builder
   pageContent() {
     if (this.isLoading) {
       LoadingIndicator()
     } else {
-      Column() {
-        Text(this.tl('Login'))
-          .fontSize(24)
-          .fontWeight(FontWeight.Medium)
-          .margin({ bottom: 24 })
-
-        if (this.config.hasPasswordLogin === true) {
-          TextInput({ placeholder: this.tl('Username'), text: this.username })
-            .width('100%')
-            .margin({ bottom: 12 })
-            .onChange((v: string) => { this.username = v; })
-          TextInput({ placeholder: this.tl('Password'), text: this.password })
-            .width('100%')
-            .type(InputType.Password)
-            .margin({ bottom: 16 })
-            .onChange((v: string) => { this.password = v; })
-            .onSubmit(() => this.submitLogin())
-        }
-
-        if (this.config.hasCookieLogin === true && this.config.cookieFields !== undefined) {
-          ForEach(this.config.cookieFields, (field: string, index: number) => {
-            TextInput({ placeholder: field, text: this.cookieValues[index] ?? '' })
-              .width('100%')
-              .type(InputType.Password)
-              .margin({ bottom: 12 })
-              .onChange((v: string) => {
-                this.cookieValues[index] = v;
-              })
-          }, (field: string, index: number) => `${field}_${index}`)
-        }
-
-        if (this.config.hasPasswordLogin !== true && this.config.hasCookieLogin !== true) {
-          Text(this.tl('Login with password is disabled'))
-            .fontColor($r('app.color.text_secondary'))
-        } else {
-          Button(this.tl('Continue'))
-            .width('100%')
-            .enabled(!this.isSubmitting)
-            .onClick(() => this.submitLogin())
-        }
-
-        if (this.config.loginWebsite !== undefined && this.config.loginWebsite.length > 0) {
-          Button(this.tl('Login with webview'))
-            .width('100%')
-            .margin({ top: 16 })
-            .type(ButtonType.Normal)
-            .onClick(() => RouterUtil.openWebView(this.config.loginWebsite!))
-        }
-
-        if (this.config.registerWebsite !== undefined && this.config.registerWebsite.length > 0) {
-          Button(this.tl('Create Account'))
-            .width('100%')
-            .margin({ top: 8 })
-            .type(ButtonType.Normal)
-            .onClick(() => RouterUtil.launchUrl(this.config.registerWebsite!))
-        }
+      Column({ space: 12 }) {
+        this.infoItemsSection()
+        this.loginFormCard()
       }
       .width('100%')
       .constraintSize({ maxWidth: 400 })
-      .padding(24)
     }
   }
 
@@ -155,6 +210,7 @@ struct ComicSourceLoginPage {
     Stack() {
       ImmersivePageScaffold({
         title: `${this.tl('Login')} - ${this.sourceName}`,
+        titleMode: HdsTheme.SETTINGS_SUBPAGE_TITLE_MODE,
         showBack: true,
         scrollable: false,
         onBack: () => RouterUtil.back(),

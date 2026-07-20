@@ -505,6 +505,20 @@ export class DataBridge implements MethodCallHandler {
     return this.invoke('startDownload', params);
   }
 
+  getComicArchives(sourceKey: string, id: string): Promise<Object | null> {
+    let params: SourceComicParams = { sourceKey: sourceKey, id: id };
+    return this.invoke('getComicArchives', params);
+  }
+
+  downloadComicArchive(sourceKey: string, id: string, archiveId: string): Promise<Object | null> {
+    let params: ArchiveDownloadParams = {
+      sourceKey: sourceKey,
+      id: id,
+      archiveId: archiveId
+    };
+    return this.invoke('downloadComicArchive', params);
+  }
+
   importComicFromPath(path: string): Promise<Object | null> {
     let importParams: PathParams = { path: path };
     return this.invoke('importComicFromPath', importParams);
@@ -565,6 +579,19 @@ export class DataBridge implements MethodCallHandler {
   comicSourceRelogin(sourceKey: string): Promise<Object | null> {
     let params: SourceKeyParams = { sourceKey: sourceKey };
     return this.invoke('comicSourceRelogin', params);
+  }
+
+  comicSourceWebViewLoginCheck(
+    sourceKey: string,
+    url: string,
+    title: string
+  ): Promise<Object | null> {
+    let params: WebViewLoginCheckParams = {
+      sourceKey: sourceKey,
+      url: url,
+      title: title
+    };
+    return this.invoke('comicSourceWebViewLoginCheck', params);
   }
 
   invokeComicSourceCallback(sourceKey: string, settingKey: string): Promise<Object | null> {
@@ -851,6 +878,23 @@ interface StartDownloadParams {
   sourceKey: string;
   id: string;
   chapters?: number[];
+}
+
+interface SourceComicParams {
+  sourceKey: string;
+  id: string;
+}
+
+interface ArchiveDownloadParams {
+  sourceKey: string;
+  id: string;
+  archiveId: string;
+}
+
+interface WebViewLoginCheckParams {
+  sourceKey: string;
+  url: string;
+  title: string;
 }
 
 interface NameParams {

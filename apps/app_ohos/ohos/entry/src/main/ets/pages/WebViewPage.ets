@@ -1,10 +1,13 @@
 import { webview } from '@kit.ArkWeb';
 import router from '@ohos.router';
 import { WebViewBridge } from '../bridge/WebViewBridge';
+import { DataService } from '../service/DataService';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { common } from '@kit.AbilityKit';
 import { LoadingIndicator } from '../components/LoadingIndicator';
 import { AuthSessionGuard } from '../utils/AuthSessionGuard';
+import promptAction from '@ohos.promptAction';
+import { TranslationUtil } from '../utils/TranslationUtil';
 
 const TAG: string = 'WebViewPage';
 const DOMAIN: number = 0x0000;
@@ -14,6 +17,7 @@ const STORAGE_KEY_URL: string = 'webview_target_url';
 
 interface WebViewRouteParams {
   url?: string;
+  loginSourceKey?: string;
 }
 
 @Entry
@@ -26,8 +30,11 @@ struct WebViewPage {
   @State canGoForward: boolean = false;
   @State openedViaRouter: boolean = false;
   @State authBlocked: boolean = false;
+  @State loginSourceKey: string = '';
+  @State loginCompleted: boolean = false;
   private controller: webview.WebviewController = new webview.WebviewController();
   private bridge: WebViewBridge = WebViewBridge.getInstance();
+  private context = getContext(this) as common.UIAbilityContext;
 
   aboutToAppear(): void {
     this.authBlocked = AuthSessionGuard.shouldBlock();
@@ -35,6 +42,7 @@ struct WebViewPage {
       AuthSessionGuard.redirectIfNeeded();
       return;
     }
+    TranslationUtil.ensureLoaded(this.context);
     let params = router.getParams() as WebViewRouteParams;
     if (params?.url !== undefined && params.url.length > 0) {
       this.pageUrl = params.url;
@@ -42,6 +50,10 @@ struct WebViewPage {
     } else {
       let stored: string | undefined = AppStorage.get<string>(STORAGE_KEY_URL);
       this.pageUrl = stored !== undefined ? stored : '';
+    }
+    if (params?.loginSourceKey !== undefined && params.loginSourceKey.length > 0) {
+      this.loginSourceKey = params.loginSourceKey;
+      this.openedViaRouter = true;
     }
     webview.WebviewController.setWebDebuggingAccess(true);
     this.bridge.registerSession(this.controller, this.pageUrl, () => this.onClose());
@@ -117,6 +129,7 @@ struct WebViewPage {
               this.updateNavigationState();
               hilog.info(DOMAIN, TAG, 'Page begin: ' + event.url);
               this.checkCloudflare(event.url);
+              this.tryLoginCheck();
             }
           })
           .onPageEnd((event) => {
@@ -125,11 +138,13 @@ struct WebViewPage {
               this.updateNavigationState();
               hilog.info(DOMAIN, TAG, 'Page end: ' + event.url);
               this.extractCookies(event.url);
+              this.tryLoginCheck();
             }
           })
           .onTitleReceive((event) => {
             if (event !== null && event.title !== undefined) {
               this.title = event.title;
+              this.tryLoginCheck();
             }
           })
           .onErrorReceive((event) => {
@@ -176,6 +191,26 @@ struct WebViewPage {
     }
     let context: common.UIAbilityContext = this.getUIContext().getHostContext() as common.UIAbilityContext;
     context.terminateSelf();
+  }
+
+  private async tryLoginCheck(): Promise<void> {
+    if (this.loginSourceKey.length === 0 || this.loginCompleted) {
+      return;
+    }
+    if (this.pageUrl.length === 0) {
+      return;
+    }
+    let matched = await DataService.getInstance().comicSourceWebViewLoginCheck(
+      this.loginSourceKey, this.pageUrl, this.title
+    );
+    if (!matched) {
+      return;
+    }
+    this.loginCompleted = true;
+    promptAction.showToast({
+      message: TranslationUtil.tl('Success', this.context)
+    });
+    this.onClose();
   }
 
   private checkCloudflare(url: string): void {
