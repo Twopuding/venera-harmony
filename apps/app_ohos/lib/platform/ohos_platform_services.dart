@@ -239,3 +239,25 @@ class OhosProxy {
     }
   }
 }
+
+class OhosStorage {
+  static const _channel = MethodChannel('venera/method_channel');
+
+  static Future<int> getCacheSize() async {
+    try {
+      var result = await _channel.invokeMethod<int>('getCacheSize');
+      return result ?? 0;
+    } on PlatformException {
+      return 0;
+    }
+  }
+
+  static Future<bool> clearAppCache() async {
+    try {
+      var result = await _channel.invokeMethod<bool>('clearAppCache');
+      return result ?? false;
+    } on PlatformException {
+      return false;
+    }
+  }
+}

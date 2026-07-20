@@ -19,7 +19,7 @@
         "description": "$string:EntryAbility_desc",
         "icon": "$media:icon",
         "label": "$string:EntryAbility_label",
-        "startWindowIcon": "$media:icon",
+        "startWindowIcon": "$media:icon_startwindow",
         "startWindowBackground": "$color:start_window_background",
         "exported": true,
         "skills": [
@@ -39,7 +39,7 @@
         "description": "$string:ReaderAbility_desc",
         "icon": "$media:icon",
         "label": "$string:ReaderAbility_label",
-        "startWindowIcon": "$media:icon",
+        "startWindowIcon": "$media:icon_startwindow",
         "startWindowBackground": "$color:start_window_background",
         "exported": false,
         "launchType": "singleton"
@@ -50,7 +50,7 @@
         "description": "$string:WebViewAbility_desc",
         "icon": "$media:icon",
         "label": "$string:WebViewAbility_label",
-        "startWindowIcon": "$media:icon",
+        "startWindowIcon": "$media:icon_startwindow",
         "startWindowBackground": "$color:start_window_background",
         "exported": false,
         "launchType": "standard"
@@ -61,7 +61,7 @@
         "description": "$string:SettingsAbility_desc",
         "icon": "$media:icon",
         "label": "$string:SettingsAbility_label",
-        "startWindowIcon": "$media:icon",
+        "startWindowIcon": "$media:icon_startwindow",
         "startWindowBackground": "$color:start_window_background",
         "exported": false,
         "launchType": "singleton"

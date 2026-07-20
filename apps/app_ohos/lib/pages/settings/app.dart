@@ -8,6 +8,27 @@ class AppSettings extends StatefulWidget {
 }
 
 class _AppSettingsState extends State<AppSettings> {
+  String? _cacheSizeText;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshCacheSize();
+  }
+
+  Future<void> _refreshCacheSize() async {
+    int size;
+    if (App.isOhos) {
+      size = await OhosStorage.getCacheSize();
+    } else {
+      size = CacheManager().currentSize;
+    }
+    if (!mounted) return;
+    setState(() {
+      _cacheSizeText = bytesToReadableString(size);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return SmoothCustomScrollView(
@@ -59,7 +80,7 @@ class _AppSettingsState extends State<AppSettings> {
         ).toSliver(),
         ListTile(
           title: Text("Cache Size".tl),
-          subtitle: Text(bytesToReadableString(CacheManager().currentSize)),
+          subtitle: Text(_cacheSizeText ?? "..."),
         ).toSliver(),
         _CallbackSetting(
           title: "Clear Cache".tl,
@@ -70,10 +91,13 @@ class _AppSettingsState extends State<AppSettings> {
               barrierDismissible: false,
               allowCancel: false,
             );
+            if (App.isOhos) {
+              await OhosStorage.clearAppCache();
+            }
             await CacheManager().clear();
             loadingDialog.close();
             context.showMessage(message: "Cache cleared".tl);
-            setState(() {});
+            await _refreshCacheSize();
           },
         ).toSliver(),
         _CallbackSetting(

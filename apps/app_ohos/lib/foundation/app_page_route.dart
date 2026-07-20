@@ -476,7 +476,7 @@ class SlidePageTransitionBuilder extends PageTransitionsBuilder {
           end: const Offset(-0.4, 0),
         ).animate(secondaryCurve),
         child: PhysicalModel(
-          color: Colors.transparent,
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.zero,
           clipBehavior: Clip.hardEdge,
           elevation: 6,

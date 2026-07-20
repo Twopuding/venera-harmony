@@ -1,11 +1,9 @@
 import { MethodResult } from '@ohos/flutter_ohos';
 import { FlutterBridge, BridgeMethodCall, MethodCallHandler } from './FlutterBridge';
-import { SuperResolutionBridge } from './SuperResolutionBridge';
-import { UIAbility } from '@kit.AbilityKit';
+import { UIAbility, application, common, contextConstant, Want } from '@kit.AbilityKit';
 import { hilog, hidebug } from '@kit.PerformanceAnalysisKit';
-import { picker, fileIo } from '@kit.CoreFileKit';
-import { batteryInfo, BusinessError } from '@kit.BasicServicesKit';
-import { Want, common } from '@kit.AbilityKit';
+import { picker, fileIo, storageStatistics } from '@kit.CoreFileKit';
+import { batteryInfo, BusinessError, deviceInfo } from '@kit.BasicServicesKit';
 import { window } from '@kit.ArkUI';
 import { userAuth } from '@kit.UserAuthenticationKit';
 import { connection } from '@kit.NetworkKit';
@@ -18,7 +16,6 @@ export class PlatformBridge implements MethodCallHandler {
   private bridge: FlutterBridge = FlutterBridge.getInstance();
   private context: UIAbility | null = null;
   private mainWindow: window.Window | null = null;
-  private srBridge: SuperResolutionBridge = new SuperResolutionBridge();
 
   setContext(context: UIAbility): void {
     this.context = context;
@@ -76,14 +73,12 @@ export class PlatformBridge implements MethodCallHandler {
       this.handleSetProxy(call, result);
     } else if (call.method === 'clearProxy') {
       this.handleClearProxy(result);
-    } else if (call.method === 'srIsAvailable') {
-      this.handleSrIsAvailable(result);
-    } else if (call.method === 'srInitialize') {
-      this.handleSrInitialize(call, result);
-    } else if (call.method === 'srProcessFile') {
-      this.handleSrProcessFile(call, result);
     } else if (call.method === 'getFreeMemory') {
       this.handleGetFreeMemory(result);
+    } else if (call.method === 'getCacheSize') {
+      this.handleGetCacheSize(result);
+    } else if (call.method === 'clearAppCache') {
+      this.handleClearAppCache(result);
     } else {
       result.notImplemented();
     }
@@ -643,92 +638,6 @@ export class PlatformBridge implements MethodCallHandler {
     }
   }
 
-  private handleSrIsAvailable(result: MethodResult): void {
-    let available: boolean = this.srBridge.isAvailable();
-    hilog.info(DOMAIN, TAG, 'SR isAvailable: backend=' + this.srBridge.getBackendType() + ' available=' + available.toString());
-    result.success(available);
-  }
-
-  private handleSrInitialize(call: BridgeMethodCall, result: MethodResult): void {
-    hilog.info(DOMAIN, TAG, 'SR initialize: loading model from rawfile');
-    if (this.context === null) {
-      hilog.error(DOMAIN, TAG, 'SR initialize: context is null');
-      result.success(false);
-      return;
-    }
-    try {
-      let resMgr = this.context.context.resourceManager;
-      resMgr.getRawFileContent('realesr-animevideov3.ms').then((content: Uint8Array) => {
-        hilog.info(DOMAIN, TAG, 'SR initialize: rawfile loaded, size=' + content.byteLength.toString());
-        let modelBuffer: ArrayBuffer = content.buffer.slice(content.byteOffset, content.byteOffset + content.byteLength);
-        this.srBridge.initialize(modelBuffer).then((success: boolean) => {
-          hilog.info(DOMAIN, TAG, 'SR initialize result: ' + success.toString());
-          result.success(success);
-        }).catch((err: Error) => {
-          hilog.error(DOMAIN, TAG, 'SR initialize exception: ' + err.message);
-          result.success(false);
-        });
-      }).catch((err: BusinessError) => {
-        hilog.error(DOMAIN, TAG, 'SR initialize: failed to read rawfile: ' + err.message);
-        result.success(false);
-      });
-    } catch (e) {
-      hilog.error(DOMAIN, TAG, 'SR initialize: resourceManager exception: ' + JSON.stringify(e));
-      result.success(false);
-    }
-  }
-
-  private handleSrProcessFile(call: BridgeMethodCall, result: MethodResult): void {
-    if (call.args === null || call.rawCall === undefined) {
-      hilog.error(DOMAIN, TAG, 'SR processFile: args or rawCall is null');
-      result.success('');
-      return;
-    }
-    try {
-      let filePath: Object | null = call.rawCall.argument('filePath');
-      if (filePath === null) {
-        hilog.error(DOMAIN, TAG, 'SR processFile: filePath is null');
-        result.success('');
-        return;
-      }
-      let pathStr: string = String(filePath);
-      if (pathStr.length === 0) {
-        hilog.error(DOMAIN, TAG, 'SR processFile: filePath is empty');
-        result.success('');
-        return;
-      }
-      hilog.error(DOMAIN, TAG, 'SR processFile: reading from ' + pathStr);
-      let imageFile: fileIo.File = fileIo.openSync(pathStr, fileIo.OpenMode.READ_ONLY);
-      let fileStat: fileIo.Stat = fileIo.statSync(pathStr);
-      let imageData: ArrayBuffer = new ArrayBuffer(fileStat.size);
-      fileIo.readSync(imageFile.fd, imageData);
-      fileIo.closeSync(imageFile);
-      let imageBytes: Uint8Array = new Uint8Array(imageData);
-      hilog.error(DOMAIN, TAG, 'SR processFile: read ' + imageBytes.byteLength.toString() + ' bytes');
-
-      this.srBridge.processImage(imageBytes).then((outputData: Uint8Array | null) => {
-        if (outputData !== null) {
-          let outputPath: string = pathStr + '_sr_result';
-          let outFile: fileIo.File = fileIo.openSync(outputPath, fileIo.OpenMode.CREATE | fileIo.OpenMode.WRITE_ONLY);
-          let outBuffer: ArrayBuffer = outputData.buffer.slice(outputData.byteOffset, outputData.byteOffset + outputData.byteLength);
-          fileIo.writeSync(outFile.fd, outBuffer);
-          fileIo.closeSync(outFile);
-          hilog.error(DOMAIN, TAG, 'SR processFile: wrote result to ' + outputPath + ' size=' + outputData.byteLength.toString());
-          result.success(outputPath);
-        } else {
-          hilog.error(DOMAIN, TAG, 'SR processFile: output is null');
-          result.success('');
-        }
-      }).catch((err: BusinessError) => {
-        hilog.error(DOMAIN, TAG, 'SR processFile exception: ' + err.message);
-        result.success('');
-      });
-    } catch (e) {
-      hilog.error(DOMAIN, TAG, 'SR processFile: exception ' + JSON.stringify(e));
-      result.success('');
-    }
-  }
-
   private handleGetFreeMemory(result: MethodResult): void {
     try {
       let memInfo: hidebug.SystemMemInfo = hidebug.getSystemMemInfo();
@@ -739,6 +648,82 @@ export class PlatformBridge implements MethodCallHandler {
       hilog.error(DOMAIN, TAG, 'Failed to get free memory: ' + JSON.stringify(e));
       result.success(null);
     }
+  }
+
+  private handleGetCacheSize(result: MethodResult): void {
+    storageStatistics.getCurrentBundleStats().then((bundleStats: storageStatistics.BundleStats) => {
+      hilog.info(DOMAIN, TAG, 'cacheSize: ' + bundleStats.cacheSize.toString());
+      result.success(bundleStats.cacheSize);
+    }).catch((err: BusinessError) => {
+      hilog.error(DOMAIN, TAG, 'getCurrentBundleStats failed: ' + JSON.stringify(err));
+      result.success(0);
+    });
+  }
+
+  private async collectCacheDirs(): Promise<Array<string>> {
+    let paths: Array<string> = [];
+    if (this.context === null) {
+      return paths;
+    }
+    let uiContext: common.UIAbilityContext = this.context.context;
+    let moduleContext: common.Context = await application.createModuleContext(uiContext, 'entry');
+
+    // el2: base/cache + haps/entry/cache
+    paths.push(moduleContext.cacheDir);
+    paths.push(uiContext.cacheDir);
+
+    // el1: base/cache + haps/entry/cache
+    moduleContext.area = contextConstant.AreaMode.EL1;
+    uiContext.area = contextConstant.AreaMode.EL1;
+    paths.push(moduleContext.cacheDir);
+    paths.push(uiContext.cacheDir);
+
+    // restore EL2
+    moduleContext.area = contextConstant.AreaMode.EL2;
+    uiContext.area = contextConstant.AreaMode.EL2;
+    return paths;
+  }
+
+  private clearDirectoryContents(dirPath: string): void {
+    let filenames: string[] = [];
+    try {
+      filenames = fileIo.listFileSync(dirPath);
+    } catch (err) {
+      hilog.error(DOMAIN, TAG, 'listFile failed for ' + dirPath + ': ' + JSON.stringify(err));
+      return;
+    }
+    for (let i = 0; i < filenames.length; i++) {
+      let childPath: string = dirPath + '/' + filenames[i];
+      let isDirectory: boolean = false;
+      try {
+        isDirectory = fileIo.statSync(childPath).isDirectory();
+      } catch (err) {
+        hilog.error(DOMAIN, TAG, 'stat failed for ' + childPath + ': ' + JSON.stringify(err));
+        continue;
+      }
+      try {
+        if (isDirectory) {
+          fileIo.rmdirSync(childPath);
+        } else {
+          fileIo.unlinkSync(childPath);
+        }
+      } catch (err) {
+        hilog.error(DOMAIN, TAG, 'remove failed for ' + childPath + ': ' + JSON.stringify(err));
+      }
+    }
+  }
+
+  private handleClearAppCache(result: MethodResult): void {
+    this.collectCacheDirs().then((paths: Array<string>) => {
+      for (let i = 0; i < paths.length; i++) {
+        hilog.info(DOMAIN, TAG, 'Clearing cache dir: ' + paths[i]);
+        this.clearDirectoryContents(paths[i]);
+      }
+      result.success(true);
+    }).catch((err: BusinessError) => {
+      hilog.error(DOMAIN, TAG, 'clearAppCache failed: ' + JSON.stringify(err));
+      result.success(false);
+    });
   }
 }
 
