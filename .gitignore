@@ -31,12 +31,16 @@ app.*.map.json
 # ===== Build outputs =====
 build/
 **/build_log.txt
+*.hap
+*.app
 
 # ===== HarmonyOS =====
 **/oh_modules/
 **/node_modules/
 **/.hvigor/
 **/.cxx/
+**/.cache/
+**/screenshots/
 **/.clangd
 **/.clang-format
 **/.clang-tidy
