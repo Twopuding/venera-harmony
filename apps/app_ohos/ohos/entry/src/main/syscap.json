@@ -5,6 +5,8 @@
     ]
   },
   "development": {
-    "addedSysCaps": []
+    "addedSysCaps": [
+      "SystemCapability.AI.Vision.VisionBase"
+    ]
   }
 }

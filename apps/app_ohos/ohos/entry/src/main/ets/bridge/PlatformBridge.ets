@@ -1,8 +1,9 @@
 import { MethodResult } from '@ohos/flutter_ohos';
 import { FlutterBridge, BridgeMethodCall, MethodCallHandler } from './FlutterBridge';
+import { SuperResolutionBridge } from './SuperResolutionBridge';
 import { UIAbility, application, common, contextConstant, Want } from '@kit.AbilityKit';
 import { hilog, hidebug } from '@kit.PerformanceAnalysisKit';
-import { picker, fileIo, storageStatistics } from '@kit.CoreFileKit';
+import { picker, fileIo, fileUri, storageStatistics } from '@kit.CoreFileKit';
 import { batteryInfo, BusinessError, deviceInfo } from '@kit.BasicServicesKit';
 import { window } from '@kit.ArkUI';
 import { userAuth } from '@kit.UserAuthenticationKit';
@@ -16,6 +17,7 @@ export class PlatformBridge implements MethodCallHandler {
   private bridge: FlutterBridge = FlutterBridge.getInstance();
   private context: UIAbility | null = null;
   private mainWindow: window.Window | null = null;
+  private srBridge: SuperResolutionBridge = new SuperResolutionBridge();
 
   setContext(context: UIAbility): void {
     this.context = context;
@@ -73,6 +75,12 @@ export class PlatformBridge implements MethodCallHandler {
       this.handleSetProxy(call, result);
     } else if (call.method === 'clearProxy') {
       this.handleClearProxy(result);
+    } else if (call.method === 'srIsAvailable') {
+      this.handleSrIsAvailable(result);
+    } else if (call.method === 'srInitialize') {
+      this.handleSrInitialize(result);
+    } else if (call.method === 'srProcessFile') {
+      this.handleSrProcessFile(call, result);
     } else if (call.method === 'getFreeMemory') {
       this.handleGetFreeMemory(result);
     } else if (call.method === 'getCacheSize') {
@@ -295,15 +303,47 @@ export class PlatformBridge implements MethodCallHandler {
       result.error('ERROR', 'Context is null', null);
       return;
     }
+    let pickParams: PickFileParsedParams = this.parsePickFileArgs(call.args);
     try {
       let documentSelectOptions: picker.DocumentSelectOptions = new picker.DocumentSelectOptions();
+      documentSelectOptions.maxSelectNumber = 1;
+      if (pickParams.extensions.length > 0) {
+        let suffixes: Array<string> = [];
+        for (let i: number = 0; i < pickParams.extensions.length; i++) {
+          let ext: string = pickParams.extensions[i];
+          if (ext.length === 0) {
+            continue;
+          }
+          if (ext.startsWith('.')) {
+            suffixes.push(ext);
+          } else {
+            suffixes.push('.' + ext);
+          }
+        }
+        if (suffixes.length > 0) {
+          documentSelectOptions.fileSuffixFilters = [suffixes.join(',')];
+        }
+      }
       let documentPicker: picker.DocumentViewPicker = new picker.DocumentViewPicker(this.context.context);
       documentPicker.select(documentSelectOptions).then((selectResult: Array<string>) => {
-        if (selectResult.length > 0) {
-          hilog.info(DOMAIN, TAG, 'File selected: ' + selectResult[0]);
-          result.success(selectResult[0]);
-        } else {
+        if (selectResult.length === 0) {
           result.success('');
+          return;
+        }
+        let srcUri: string = selectResult[0];
+        try {
+          let cachePath: string = this.copyUriToCache(srcUri);
+          hilog.info(DOMAIN, TAG, 'File selected and copied to: ' + cachePath);
+          result.success(cachePath);
+        } catch (copyErr) {
+          let errMsg: string = 'Copy picked file failed';
+          try {
+            errMsg = JSON.stringify(copyErr);
+          } catch (e) {
+            // keep default
+          }
+          hilog.error(DOMAIN, TAG, 'Pick file copy failed: ' + errMsg);
+          result.error('ERROR', 'Pick file copy failed', errMsg);
         }
       }).catch((err: BusinessError) => {
         hilog.error(DOMAIN, TAG, 'Pick file failed: ' + err.message);
@@ -320,30 +360,150 @@ export class PlatformBridge implements MethodCallHandler {
       return;
     }
     let saveParams: SaveFileParsedParams = this.parseSaveFileArgs(call.args);
+    hilog.info(DOMAIN, TAG,
+      'saveFile request source=' + saveParams.sourceFilePath +
+        ' suggested=' + saveParams.suggestedName);
     try {
+      if (saveParams.sourceFilePath.length > 0 &&
+        !fileIo.accessSync(saveParams.sourceFilePath)) {
+        result.error('ERROR', 'Source file not accessible', saveParams.sourceFilePath);
+        return;
+      }
       let documentSaveOptions: picker.DocumentSaveOptions = new picker.DocumentSaveOptions();
-      if (saveParams.suggestedName.length > 0) {
-        documentSaveOptions.newFileNames = [saveParams.suggestedName];
+      let saveName: string = saveParams.suggestedName;
+      if (saveName.length === 0 && saveParams.sourceFilePath.length > 0) {
+        saveName = this.fileNameFromUri(saveParams.sourceFilePath);
+      }
+      if (saveName.length > 0) {
+        documentSaveOptions.newFileNames = [saveName];
       }
       let documentPicker: picker.DocumentViewPicker = new picker.DocumentViewPicker(this.context.context);
       documentPicker.save(documentSaveOptions).then((saveResult: Array<string>) => {
-        if (saveResult.length > 0) {
-          let destUri: string = saveResult[0];
-          if (saveParams.sourceFilePath.length > 0) {
-            fileIo.copyFileSync(saveParams.sourceFilePath, destUri);
-          }
+        if (saveResult.length === 0) {
+          hilog.info(DOMAIN, TAG, 'Save file cancelled');
+          result.success('');
+          return;
+        }
+        let destUri: string = saveResult[0];
+        if (saveParams.sourceFilePath.length === 0) {
+          result.success(destUri);
+          return;
+        }
+        try {
+          this.copySandboxFileToUri(saveParams.sourceFilePath, destUri);
           hilog.info(DOMAIN, TAG, 'File saved to: ' + destUri);
           result.success(destUri);
-        } else {
-          result.success('');
+        } catch (copyErr) {
+          let errMsg: string = 'Copy to save destination failed';
+          try {
+            errMsg = JSON.stringify(copyErr);
+          } catch (e) {
+            // keep default
+          }
+          hilog.error(DOMAIN, TAG, 'Save file copy failed: ' + errMsg);
+          result.error('ERROR', 'Save file copy failed', errMsg);
         }
       }).catch((err: BusinessError) => {
-        hilog.error(DOMAIN, TAG, 'Save file failed: ' + err.message);
+        hilog.error(DOMAIN, TAG, 'Save file failed: ' + err.code + ' ' + err.message);
         result.error('ERROR', 'Save file failed', err.message);
       });
     } catch (e) {
-      result.error('ERROR', 'Save file exception', null);
+      let errMsg: string = 'Save file exception';
+      try {
+        errMsg = JSON.stringify(e);
+      } catch (ex) {
+        // keep default
+      }
+      hilog.error(DOMAIN, TAG, errMsg);
+      result.error('ERROR', 'Save file exception', errMsg);
     }
+  }
+
+  private copySandboxFileToUri(sourcePath: string, destUri: string): void {
+    let srcFile: fileIo.File | null = null;
+    let destFile: fileIo.File | null = null;
+    try {
+      srcFile = fileIo.openSync(sourcePath, fileIo.OpenMode.READ_ONLY);
+      destFile = fileIo.openSync(destUri, fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE);
+      fileIo.copyFileSync(srcFile.fd, destFile.fd, 0);
+    } finally {
+      if (destFile !== null) {
+        fileIo.closeSync(destFile);
+      }
+      if (srcFile !== null) {
+        fileIo.closeSync(srcFile);
+      }
+    }
+  }
+
+  private copyUriToCache(srcUri: string): string {
+    if (this.context === null) {
+      throw new Error('Context is null');
+    }
+    let displayName: string = this.fileNameFromUri(srcUri);
+    if (displayName.length === 0) {
+      displayName = 'picked_file_' + Date.now().toString();
+    }
+    let cachePath: string = this.context.context.cacheDir + '/' + displayName;
+    try {
+      fileIo.unlinkSync(cachePath);
+    } catch (e) {
+      // ignore if file does not exist
+    }
+    let srcFile: fileIo.File | null = null;
+    let destFile: fileIo.File | null = null;
+    try {
+      srcFile = fileIo.openSync(srcUri, fileIo.OpenMode.READ_ONLY);
+      destFile = fileIo.openSync(cachePath, fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE);
+      fileIo.copyFileSync(srcFile.fd, destFile.fd, 0);
+    } finally {
+      if (destFile !== null) {
+        fileIo.closeSync(destFile);
+      }
+      if (srcFile !== null) {
+        fileIo.closeSync(srcFile);
+      }
+    }
+    return cachePath;
+  }
+
+  private fileNameFromUri(uri: string): string {
+    try {
+      let uriObj: fileUri.FileUri = new fileUri.FileUri(uri);
+      if (uriObj.name !== undefined && uriObj.name !== null && uriObj.name.length > 0) {
+        return uriObj.name;
+      }
+    } catch (e) {
+      hilog.info(DOMAIN, TAG, 'FileUri name unavailable, fallback to path parse');
+    }
+    let decoded: string = uri;
+    try {
+      decoded = decodeURIComponent(uri);
+    } catch (e) {
+      // keep original
+    }
+    let slash: number = decoded.lastIndexOf('/');
+    if (slash >= 0 && slash < decoded.length - 1) {
+      return decoded.substring(slash + 1);
+    }
+    return decoded;
+  }
+
+  private parsePickFileArgs(args: Object | null): PickFileParsedParams {
+    let res: PickFileParsedParams = { extensions: [] };
+    if (args === null) {
+      return res;
+    }
+    try {
+      let jsonStr: string = JSON.stringify(args);
+      let parsed: PickFileParsedParams = JSON.parse(jsonStr);
+      if (parsed.extensions !== undefined && parsed.extensions !== null && Array.isArray(parsed.extensions)) {
+        res.extensions = parsed.extensions;
+      }
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'Failed to parse pickFile args');
+    }
+    return res;
   }
 
   private parseSaveFileArgs(args: Object | null): SaveFileParsedParams {
@@ -638,6 +798,73 @@ export class PlatformBridge implements MethodCallHandler {
     }
   }
 
+  private handleSrIsAvailable(result: MethodResult): void {
+    let available: boolean = this.srBridge.isAvailable();
+    hilog.info(DOMAIN, TAG, 'SR isAvailable: backend=' + this.srBridge.getBackendType() + ' available=' + available.toString());
+    result.success(available);
+  }
+
+  private handleSrInitialize(result: MethodResult): void {
+    hilog.info(DOMAIN, TAG, 'SR initialize: creating CoreVisionKit analyzer');
+    this.srBridge.initialize().then((success: boolean) => {
+      hilog.info(DOMAIN, TAG, 'SR initialize result: ' + success.toString());
+      result.success(success);
+    }).catch((err: Error) => {
+      hilog.error(DOMAIN, TAG, 'SR initialize exception: ' + err.message);
+      result.success(false);
+    });
+  }
+
+  private handleSrProcessFile(call: BridgeMethodCall, result: MethodResult): void {
+    if (call.args === null || call.rawCall === undefined) {
+      hilog.error(DOMAIN, TAG, 'SR processFile: args or rawCall is null');
+      result.success('');
+      return;
+    }
+    try {
+      let filePath: Object | null = call.rawCall.argument('filePath');
+      if (filePath === null) {
+        hilog.error(DOMAIN, TAG, 'SR processFile: filePath is null');
+        result.success('');
+        return;
+      }
+      let pathStr: string = String(filePath);
+      if (pathStr.length === 0) {
+        hilog.error(DOMAIN, TAG, 'SR processFile: filePath is empty');
+        result.success('');
+        return;
+      }
+      hilog.info(DOMAIN, TAG, 'SR processFile: reading from ' + pathStr);
+      let imageFile: fileIo.File = fileIo.openSync(pathStr, fileIo.OpenMode.READ_ONLY);
+      let fileStat: fileIo.Stat = fileIo.statSync(pathStr);
+      let imageData: ArrayBuffer = new ArrayBuffer(fileStat.size);
+      fileIo.readSync(imageFile.fd, imageData);
+      fileIo.closeSync(imageFile);
+      let imageBytes: Uint8Array = new Uint8Array(imageData);
+
+      this.srBridge.processImage(imageBytes).then((outputData: Uint8Array | null) => {
+        if (outputData !== null) {
+          let outputPath: string = pathStr + '_sr_result';
+          let outFile: fileIo.File = fileIo.openSync(outputPath, fileIo.OpenMode.CREATE | fileIo.OpenMode.WRITE_ONLY);
+          let outBuffer: ArrayBuffer = outputData.buffer.slice(outputData.byteOffset, outputData.byteOffset + outputData.byteLength);
+          fileIo.writeSync(outFile.fd, outBuffer);
+          fileIo.closeSync(outFile);
+          hilog.info(DOMAIN, TAG, 'SR processFile: wrote result to ' + outputPath + ' size=' + outputData.byteLength.toString());
+          result.success(outputPath);
+        } else {
+          hilog.error(DOMAIN, TAG, 'SR processFile: output is null');
+          result.success('');
+        }
+      }).catch((err: BusinessError) => {
+        hilog.error(DOMAIN, TAG, 'SR processFile exception: ' + err.message);
+        result.success('');
+      });
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'SR processFile: exception ' + JSON.stringify(e));
+      result.success('');
+    }
+  }
+
   private handleGetFreeMemory(result: MethodResult): void {
     try {
       let memInfo: hidebug.SystemMemInfo = hidebug.getSystemMemInfo();
@@ -751,6 +978,10 @@ interface ShareFileFromDataParsedParams {
   data: Array<number>;
   mimeType: string;
   fileNameOverride: string;
+}
+
+interface PickFileParsedParams {
+  extensions: Array<string>;
 }
 
 interface SaveFileParsedParams {

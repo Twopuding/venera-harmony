@@ -1,4 +1,4 @@
-﻿library;
+library;
 
 import 'dart:async';
 import 'dart:math' as math;
@@ -44,6 +44,7 @@ import 'package:venera/utils/translations.dart';
 import 'package:venera/utils/volume.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:venera/platform/ohos_platform_services.dart';
+import 'package:venera/platform/ohos_super_resolution.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
 part 'scaffold.dart';
@@ -187,6 +188,9 @@ class _ReaderState extends State<Reader>
 
   var focusNode = FocusNode();
 
+  final srStatusNotifier = ValueNotifier<Map<int, String>>({});
+  final _processingPages = <int>{};
+
   @override
   void initState() {
     page = widget.initialPage ?? 1;
@@ -228,9 +232,23 @@ class _ReaderState extends State<Reader>
       handleVolumeEvent();
     }
     setImageCacheSize();
+    if (App.isOhos) {
+      OhosSuperResolution.reset();
+    }
     Future.delayed(const Duration(milliseconds: 200), () {
       LocalFavoritesManager().onRead(cid, type);
     });
+    ReaderImageProvider.onSrStatusChanged = (status, p) {
+      var current = Map<int, String>.from(srStatusNotifier.value);
+      if (status == 'processing') {
+        _processingPages.add(p);
+        current[p] = 'processing';
+      } else if (status == 'done' || status == 'off') {
+        _processingPages.remove(p);
+        current[p] = status;
+      }
+      srStatusNotifier.value = current;
+    };
     super.initState();
   }
 
@@ -271,6 +289,9 @@ class _ReaderState extends State<Reader>
 
   @override
   void dispose() {
+    ReaderImageProvider.onSrStatusChanged = null;
+    _processingPages.clear();
+    srStatusNotifier.dispose();
     flushHistory();
     if (isFullscreen) {
       fullscreen();
@@ -322,6 +343,8 @@ class _ReaderState extends State<Reader>
 
   @override
   void onPageChanged() {
+    _processingPages.clear();
+    srStatusNotifier.value = {};
     updateHistory();
   }
 

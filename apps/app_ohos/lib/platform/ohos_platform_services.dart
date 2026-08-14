@@ -60,29 +60,21 @@ class OhosFileDialog {
   static Future<String?> pickFile({
     List<String>? extensions,
   }) async {
-    try {
-      var result = await _channel.invokeMethod<String>('pickFile', {
-        'extensions': extensions,
-      });
-      return result;
-    } on PlatformException {
-      return null;
-    }
+    var result = await _channel.invokeMethod<String>('pickFile', {
+      'extensions': extensions,
+    });
+    return result;
   }
 
   static Future<String?> saveFile({
     required String sourceFilePath,
     String? suggestedName,
   }) async {
-    try {
-      var result = await _channel.invokeMethod<String>('saveFile', {
-        'sourceFilePath': sourceFilePath,
-        'suggestedName': suggestedName,
-      });
-      return result;
-    } on PlatformException {
-      return null;
-    }
+    var result = await _channel.invokeMethod<String>('saveFile', {
+      'sourceFilePath': sourceFilePath,
+      'suggestedName': suggestedName,
+    });
+    return result;
   }
 }
 

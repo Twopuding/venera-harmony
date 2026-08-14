@@ -199,7 +199,7 @@ class DirectoryPicker {
 Future<FileSelectResult?> selectFile({required List<String> ext}) async {
   IO._isSelectingFiles = true;
   try {
-    var filePath = await OhosFileDialog.pickFile();
+    var filePath = await OhosFileDialog.pickFile(extensions: ext);
     if (filePath == null || filePath.isEmpty) return null;
     var file = FileSelectResult(filePath);
     if (!ext.contains(file.path.split(".").last)) {
@@ -242,10 +242,20 @@ Future<void> saveFile(
       await File(cache).writeAsBytes(data);
       file = File(cache);
     }
-    await OhosFileDialog.saveFile(
-      sourceFilePath: file!.path,
-      suggestedName: filename,
+    // Align with upstream FlutterFileDialog on mobile: suggested name is the
+    // source file basename (exportAppData writes "$timestamp.venera").
+    var suggestedName = file!.name;
+    if (suggestedName.isEmpty) {
+      suggestedName = filename;
+    }
+    var savedPath = await OhosFileDialog.saveFile(
+      sourceFilePath: file.path,
+      suggestedName: suggestedName,
     );
+    // Empty string means the user cancelled the save dialog.
+    if (savedPath == null) {
+      throw Exception("Failed to save file");
+    }
   } finally {
     Future.delayed(const Duration(milliseconds: 100), () {
       IO._isSelectingFiles = false;

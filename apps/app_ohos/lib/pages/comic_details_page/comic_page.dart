@@ -987,56 +987,60 @@ class _ComicPageLoadingPlaceHolder extends StatelessWidget {
     }
 
     return Scaffold(
-      body: Shimmer(
-        color: context.isDarkMode ? Colors.grey.shade700 : Colors.white,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Appbar(
-              title: Text(""),
-              backgroundColor: context.colorScheme.surface,
-              style: AppbarStyle.shadow,
-            ),
-            const SizedBox(height: 8),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(width: 16),
-                buildImage(context),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (title != null)
-                        Text(title ?? "", style: ts.s18)
-                      else
-                        buildContainer(200, 25),
-                      const SizedBox(height: 8),
-                      buildContainer(80, 20),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            if (context.width < changePoint)
-              Row(
-                children: [
-                  Expanded(child: buildContainer(null, 36, radius: 18)),
-                  const SizedBox(width: 16),
-                  Expanded(child: buildContainer(null, 36, radius: 18)),
-                ],
-              ).paddingHorizontal(16),
-            const Divider(),
-            Expanded(
-              child: Center(
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.4,
-                ).fixHeight(24).fixWidth(24),
+      backgroundColor: context.colorScheme.surface,
+      body: Container(
+        color: context.colorScheme.surface,
+        child: Shimmer(
+          color: context.isDarkMode ? Colors.grey.shade700 : Colors.white,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Appbar(
+                title: Text(""),
+                backgroundColor: context.colorScheme.surface,
+                style: AppbarStyle.shadow,
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(width: 16),
+                  buildImage(context),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (title != null)
+                          Text(title ?? "", style: ts.s18)
+                        else
+                          buildContainer(200, 25),
+                        const SizedBox(height: 8),
+                        buildContainer(80, 20),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (context.width < changePoint)
+                Row(
+                  children: [
+                    Expanded(child: buildContainer(null, 36, radius: 18)),
+                    const SizedBox(width: 16),
+                    Expanded(child: buildContainer(null, 36, radius: 18)),
+                  ],
+                ).paddingHorizontal(16),
+              const Divider(),
+              Expanded(
+                child: Center(
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.4,
+                  ).fixHeight(24).fixWidth(24),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

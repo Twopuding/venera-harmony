@@ -396,6 +396,18 @@ class _ReaderSettingsState extends State<ReaderSettings> {
           comicSource: isEnabledSpecificSettings ? widget.comicSource : null,
           useDeviceSettings: useDeviceSpecificSettings,
         ).toSliver(),
+        if (App.isOhos)
+          _SwitchSetting(
+            title: "AI Image Super Resolution".tl,
+            subtitle: "Enhance comic image clarity with AI".tl,
+            settingKey: "enableAiSuperResolution",
+            onChanged: () {
+              widget.onChanged?.call("enableAiSuperResolution");
+            },
+            comicId: isEnabledSpecificSettings ? widget.comicId : null,
+            comicSource: isEnabledSpecificSettings ? widget.comicSource : null,
+            useDeviceSettings: useDeviceSpecificSettings,
+          ).toSliver(),
         _CallbackSetting(
           title: "Custom Image Processing".tl,
           callback: () => context.to(() => _CustomImageProcessing()),

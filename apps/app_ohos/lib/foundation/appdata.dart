@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:venera/platform/ohos_path_provider.dart';
@@ -215,6 +215,7 @@ class Settings with ChangeNotifier {
     'onClickFavorite': 'viewDetail', // viewDetail, read
     'enableDnsOverrides': false,
     'dnsOverrides': {},
+    'enableAiSuperResolution': false,
     'enableCustomImageProcessing': false,
     'customImageProcessing': defaultCustomImageProcessing,
     'sni': true,

@@ -124,36 +124,50 @@ class _AppSettingsState extends State<AppSettings> {
           title: "Export App Data".tl,
           callback: () async {
             var controller = showLoadingDialog(context);
-            var file = await exportAppData(false);
-            await saveFile(filename: "data.venera", file: file);
-            controller.close();
+            try {
+              var file = await exportAppData(false);
+              controller.close();
+              await saveFile(filename: "data.venera", file: file);
+            } catch (e, s) {
+              controller.close();
+              Log.error("Export data", e.toString(), s);
+              context.showMessage(message: "Failed to export data".tl);
+            }
           },
           actionTitle: 'Export'.tl,
         ).toSliver(),
         _CallbackSetting(
           title: "Import App Data".tl,
           callback: () async {
-            var controller = showLoadingDialog(context);
-            var file = await selectFile(ext: ['venera', 'picadata']);
-            if (file != null) {
-              var cacheFile =
-                  File(FilePath.join(App.cachePath, "import_data_temp"));
-              await file.saveTo(cacheFile.path);
-              try {
-                if (file.name.endsWith('picadata')) {
-                  await importPicaData(cacheFile);
-                } else {
-                  await importAppData(cacheFile);
-                }
-              } catch (e, s) {
-                Log.error("Import data", e.toString(), s);
-                context.showMessage(message: "Failed to import data".tl);
-              } finally {
-                cacheFile.deleteIgnoreError();
-                App.forceRebuild();
-              }
+            FileSelectResult? file;
+            try {
+              file = await selectFile(ext: ['venera', 'picadata']);
+            } catch (e, s) {
+              Log.error("Import data", e.toString(), s);
+              context.showMessage(message: "Failed to import data".tl);
+              return;
             }
-            controller.close();
+            if (file == null) {
+              return;
+            }
+            var controller = showLoadingDialog(context);
+            var cacheFile =
+                File(FilePath.join(App.cachePath, "import_data_temp"));
+            try {
+              await file.saveTo(cacheFile.path);
+              if (file.name.endsWith('picadata')) {
+                await importPicaData(cacheFile);
+              } else {
+                await importAppData(cacheFile);
+              }
+            } catch (e, s) {
+              Log.error("Import data", e.toString(), s);
+              context.showMessage(message: "Failed to import data".tl);
+            } finally {
+              cacheFile.deleteIgnoreError();
+              App.forceRebuild();
+              controller.close();
+            }
           },
           actionTitle: 'Import'.tl,
         ).toSliver(),

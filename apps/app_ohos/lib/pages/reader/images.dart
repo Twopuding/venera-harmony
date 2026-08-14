@@ -818,6 +818,7 @@ class _ContinuousModeState extends State<_ContinuousMode>
     if (page != reader.page) {
       reader.setPageQuiet(page);
       context.readerScaffold.updatePageInfo();
+      reader.srStatusNotifier.value = Map<int, String>.from(reader.srStatusNotifier.value);
       _scheduleHistoryUpdate();
     }
     cacheImages(page);
