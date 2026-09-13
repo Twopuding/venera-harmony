@@ -2,6 +2,11 @@
 {
   "apiType": 'stageMode',
   "buildOption": {
+    "resOptions": {
+      "copyCodeResource": {
+        "enable": false
+      }
+    },
     "nativeLib": {
       "filter": {
         "excludes": [

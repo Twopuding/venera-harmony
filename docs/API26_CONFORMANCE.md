@@ -36,7 +36,7 @@
 | `build-profile.json5` 缺 `buildOption.strictMode` | 无 | `{"caseSensitiveCheck": true, "useNormalizedOHMUrl": true}`（API ≥ 12 模板值） | P2 |
 | `modelVersion` = `5.0.0` | `oh-package.json5`、`hvigor/hvigor-config.json5` | 与 DevEco 26 新建工程一致 | P2（trial） |
 | hypium 1.0.6、无 hamock | `@ohos/hypium: 1.0.6` | 模板版本；API ≥ 11 需补 `@ohos/hamock` | P2（受 ohpm 网络限制） |
-| `AppScope/app.json5` | 无 `buildVersion`；icon = `$media:app_icon` | 加 `"buildVersion": "1"`；API ≥ 11 用 `$media:layered_image` | P2 |
+| `AppScope/app.json5` / `module.json5` 图标 | icon = `$media:app_icon` | `devecocli create --api-level 26` 生成的工程使用 `$media:layered_image`（需补分层图标资源）；**无 `buildVersion` 字段** | 记录：本次保留 `app_icon`（未新增分层图标资源） |
 | `module.json5` skills | `action.system.home` | `ohos.want.action.home` | P2 |
 | `entry/oh-package.json5` | 尾部多余逗号；`dependencies` 为空（flutter_ohos 由 hvigor 插件注入，不可复现） | 清理；P4 一并去除 | P2 / P4 |
 | Flutter 痕迹 | `hvigorfile.ts`/`hvigorconfig.ts` 注入 `flutter-hvigor-plugin`；`package.json` 指向 `D:\\Project\\flutter_ohos_sdk` 绝对路径；`local.properties` 含 `flutter.sdk`；`EntryAbility extends FlutterAbility`；HAP 含 libflutter.so / libapp.so / flutter_assets；`useNativeUi` 回退开关 | 全部移除 | P4（WS6） |
@@ -60,7 +60,27 @@ Full report: %TEMP%/venera-lint.md
 规则分布：`@performance/bad-deep-clone-check`（桥接层 `JSON.parse(JSON.stringify(...))` 深拷贝，多为 JsUiBridge/PlatformBridge/ReaderBridge/SettingsBridge/WebViewBridge）、`@performance/avoid-overusing-custom-component-check`（BlurCard 等小组件）等。
 **门禁**：后续每个批次复跑，Errors 必须为 0，Warnings 不得高于 47（新增项需修复或说明）。
 
-## B.5 P1 执行结果（废弃 API 机械化替换）
+## B.5 P2 执行结果（工程配置对齐）
+
+**权威来源**：`devecocli create --project-path D:\Project\api26-probe --app-name probe --api-level 26` 生成的 API 26 工程（本机 DevEco 26.0.0.621 / SDK 26.0.0.32 Beta2），以下值均取自该工程，而非猜测。
+
+| 项 | 原值 | 新值 | 结果 |
+|---|---|---|---|
+| `hvigor/hvigor-config.json5` `modelVersion` | `5.0.0` | `26.0.0` | ✅ 构建通过 |
+| `oh-package.json5` `modelVersion` | `5.0.0` | `26.0.0` | ✅ 构建通过 |
+| `oh-package.json5` devDependencies | `@ohos/hypium 1.0.6` | `@ohos/hypium 1.0.25` + `@ohos/hamock 1.0.0` | ✅ ohpm 解析成功、构建通过 |
+| `build-profile.json5` 产品 `buildOption.strictMode` | 无 | `{caseSensitiveCheck: true, useNormalizedOHMUrl: true}` | ✅ 构建通过（Flutter HAR 共存下未报错） |
+| `module.json5` skills action | `action.system.home` | `ohos.want.action.home` | ✅ |
+| `entry/oh-package.json5` | `"dependencies": {},`（尾逗号） | `"dependencies": {}` | ✅ 格式修正 |
+| `entry/build-profile.json5` | 仅 `nativeLib.filter` | 增补 `resOptions.copyCodeResource.enable = false`（模板值） | ✅ |
+
+**有意未采用**（记录原因，避免后续误判为遗漏）：
+1. `$media:layered_image` 分层图标：需新增分层图标资源与 `module.json5` 图标引用，属外观项，本次保留 `$media:app_icon`。
+2. `EntryBackupAbility` + `backup_config`：模板自带的数据备份扩展能力，非 API 26 合规项，Venera 不使用。
+3. 根 `package.json`：模板工程不含该文件；本仓的 `package.json` 仅用于注入 `flutter-hvigor-plugin`（绝对路径），随 WS6 删除。
+4. `entry/build-profile.json5` target 上的 `runtimeOS`：模板仅在产品上声明，本次保留原样以免影响 Flutter 插件注入逻辑（P4 清理）。
+
+## B.6 P1 执行结果（废弃 API 机械化替换）
 
 | 项 | 替换前 | 替换后 | 方式 |
 |---|---|---|---|
