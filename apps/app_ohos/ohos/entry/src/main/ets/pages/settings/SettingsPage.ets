@@ -5,11 +5,12 @@ import { CategoryNavTile } from '../../components/SettingsList';
 import { ImmersivePageScaffold } from '../../components/ImmersivePageScaffold';
 import { HdsTheme } from '../../design/HdsTheme';
 import { common } from '@kit.AbilityKit';
+import { UiContextHolder } from '../../utils/UiContextHolder';
 
 @Entry
 @Component
 struct SettingsPage {
-  private context = getContext(this) as common.UIAbilityContext
+  private context = UiContextHolder.hostContext()
 
   aboutToAppear(): void {
     TranslationUtil.ensureLoaded(this.context);

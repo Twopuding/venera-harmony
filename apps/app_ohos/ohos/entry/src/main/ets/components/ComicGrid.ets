@@ -49,7 +49,7 @@ export struct ComicGrid {
   private async blockComic(comic: Comic): Promise<void> {
     let word = await BlockedWordsUtil.blockComic(comic);
     if (word !== null) {
-      promptAction.showToast({ message: TranslationUtil.tl('Blocked') });
+      this.getUIContext().getPromptAction().showToast({ message: TranslationUtil.tl('Blocked') });
       await this.refreshDisplayComics();
     }
   }

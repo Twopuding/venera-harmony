@@ -1,6 +1,6 @@
-import router from '@ohos.router';
 import { ReaderBridge } from '../bridge/ReaderBridge';
 import { Want, common } from '@kit.AbilityKit';
+import { UiContextHolder } from '../utils/UiContextHolder';
 
 interface CategoryRouteParams {
   categoryKey: string;
@@ -105,9 +105,9 @@ export class RouterUtil {
   private static pushUrlTracked(url: string, params?: Object): void {
     RouterUtil.trackRouteTop(url, params);
     if (params !== undefined) {
-      router.pushUrl({ url: url, params: params });
+      UiContextHolder.router()?.pushUrl({ url: url, params: params });
     } else {
-      router.pushUrl({ url: url });
+      UiContextHolder.router()?.pushUrl({ url: url });
     }
   }
 
@@ -257,7 +257,7 @@ export class RouterUtil {
   static openWebView(url: string): void {
     AppStorage.setOrCreate<string>(STORAGE_KEY_URL, url);
     try {
-      let context = getContext() as common.UIAbilityContext;
+      let context = UiContextHolder.hostContext();
       let want: Want = {
         bundleName: BUNDLE_NAME,
         abilityName: 'WebViewAbility'
@@ -276,7 +276,7 @@ export class RouterUtil {
 
   static launchUrl(url: string): void {
     try {
-      let context = getContext() as common.UIAbilityContext;
+      let context = UiContextHolder.hostContext();
       let want: Want = {
         action: 'ohos.want.action.viewData',
         uri: url
@@ -289,6 +289,6 @@ export class RouterUtil {
 
   static back(): void {
     AppStorage.delete(AUTH_ROUTE_TOP_KEY);
-    router.back();
+    UiContextHolder.router()?.back();
   }
 }

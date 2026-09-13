@@ -1,4 +1,3 @@
-import router from '@ohos.router';
 import { RouterUtil } from '../../navigation/RouterUtil';
 import { TranslationUtil } from '../../utils/TranslationUtil';
 import { ImmersivePageScaffold } from '../../components/ImmersivePageScaffold';
@@ -6,6 +5,7 @@ import { HdsTheme } from '../../design/HdsTheme';
 import { SETTING_CATEGORIES } from '../../utils/SettingsConstants';
 import { SettingsCategoryContent } from './SettingsCategoryContent';
 import { common } from '@kit.AbilityKit';
+import { UiContextHolder } from '../../utils/UiContextHolder';
 
 interface SettingsCategoryRouteParams {
   categoryIndex?: number;
@@ -16,11 +16,11 @@ interface SettingsCategoryRouteParams {
 struct SettingsCategoryPage {
   @State categoryIndex: number = 0
   @State pageShowVersion: number = 0
-  private context = getContext(this) as common.UIAbilityContext
+  private context = UiContextHolder.hostContext()
 
   aboutToAppear(): void {
     TranslationUtil.ensureLoaded(this.context);
-    let params = router.getParams() as SettingsCategoryRouteParams;
+    let params = this.getUIContext().getRouter().getParams() as SettingsCategoryRouteParams;
     if (params !== undefined && params.categoryIndex !== undefined) {
       let index = Number(params.categoryIndex);
       if (isNaN(index)) {

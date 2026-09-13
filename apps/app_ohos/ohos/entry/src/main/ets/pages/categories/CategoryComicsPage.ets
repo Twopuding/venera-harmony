@@ -1,4 +1,3 @@
-import router from '@ohos.router';
 import { DataService, ExploreLoadResult } from '../../service/DataService';
 import { Comic } from '../../model/Comic';
 import { ComicGrid } from '../../components/ComicGrid';
@@ -9,6 +8,7 @@ import { ImmersiveScrollTopInset } from '../../components/ImmersiveScrollTopInse
 import { HdsTheme } from '../../design/HdsTheme';
 import { RouterUtil } from '../../navigation/RouterUtil';
 import { TranslationUtil } from '../../utils/TranslationUtil';
+import { UiContextHolder } from '../../utils/UiContextHolder';
 
 @Entry
 @Component
@@ -24,7 +24,7 @@ struct CategoryComicsPage {
   @State currentPage: number = 1
   @State hasMore: boolean = false
   private scroller: Scroller = new Scroller()
-  private context = getContext(this)
+  private context = UiContextHolder.hostContext()
 
   private tr(key: string): string {
     return TranslationUtil.tl(key, this.context);
@@ -32,7 +32,7 @@ struct CategoryComicsPage {
 
   aboutToAppear(): void {
     TranslationUtil.ensureLoaded(this.context);
-    let params = router.getParams() as Record<string, string>;
+    let params = this.getUIContext().getRouter().getParams() as Record<string, string>;
     this.categoryKey = params['categoryKey'] ?? '';
     this.category = params['category'] ?? '';
     this.param = params['param'] ?? '';

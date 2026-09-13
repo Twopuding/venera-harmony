@@ -10,6 +10,7 @@ import { PrivacyWindowUtil } from '../utils/PrivacyWindowUtil';
 import { AUTH_SESSION_VALID_KEY } from '../utils/AuthLifecycleUtil';
 import { AuthGatePresenter } from '../utils/AuthGatePresenter';
 import { ShellEvents } from '../utils/ShellEvents';
+import { UiContextHolder } from '../utils/UiContextHolder';
 
 let storage = LocalStorage.getShared()
 const EVENT_BACK_PRESS = 'EVENT_BACK_PRESS'
@@ -19,7 +20,7 @@ const SETTINGS_MAX_ATTEMPTS = 40
 @Entry(storage)
 @Component
 struct Index {
-  private context = getContext(this) as common.UIAbilityContext
+  private context = UiContextHolder.hostContext()
   @LocalStorageLink('viewId') viewId: string = "";
   @State useNativeUi: boolean = true;
   @State settingsReady: boolean = false;

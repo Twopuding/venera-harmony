@@ -29,10 +29,10 @@ export class SafeAreaUtil {
   private static syncAvoidAreas(win: window.Window): void {
     const systemArea: window.AvoidArea =
       win.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM);
-    const top: number = px2vp(systemArea.topRect.height);
+    const top: number = win.getUIContext().px2vp(systemArea.topRect.height);
     const navArea: window.AvoidArea =
       win.getWindowAvoidArea(window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR);
-    const bottom: number = px2vp(navArea.bottomRect.height);
+    const bottom: number = win.getUIContext().px2vp(navArea.bottomRect.height);
 
     AppStorage.setOrCreate(SafeAreaUtil.KEY_TOP, top);
     AppStorage.setOrCreate(SafeAreaUtil.KEY_BOTTOM, bottom);

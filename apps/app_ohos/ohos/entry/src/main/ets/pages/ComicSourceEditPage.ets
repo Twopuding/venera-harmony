@@ -1,4 +1,3 @@
-import router from '@ohos.router';
 import { DataService } from '../service/DataService';
 import { ImmersivePageScaffold } from '../components/ImmersivePageScaffold';
 import { NavigationMenus } from '../navigation/NavigationMenus';
@@ -6,7 +5,7 @@ import { RouterUtil } from '../navigation/RouterUtil';
 import { TranslationUtil } from '../utils/TranslationUtil';
 import { CodeEditor } from '../components/CodeEditor';
 import { HdsTheme } from '../design/HdsTheme';
-import promptAction from '@ohos.promptAction';
+import { UiContextHolder } from '../utils/UiContextHolder';
 
 @Entry
 @Component
@@ -15,11 +14,11 @@ struct ComicSourceEditPage {
   @State content: string = ''
   @State isLoading: boolean = true
   @State isSaving: boolean = false
-  private context = getContext(this)
+  private context = UiContextHolder.hostContext()
 
   aboutToAppear(): void {
     TranslationUtil.ensureLoaded(this.context);
-    let params = router.getParams() as Record<string, string>;
+    let params = this.getUIContext().getRouter().getParams() as Record<string, string>;
     this.sourceKey = params['sourceKey'] ?? '';
     this.loadFile();
   }
@@ -43,10 +42,10 @@ struct ComicSourceEditPage {
     let ok: boolean = await DataService.getInstance().saveComicSourceFile(this.sourceKey, this.content);
     this.isSaving = false;
     if (ok) {
-      promptAction.showToast({ message: this.tl('Saved') });
+      this.getUIContext().getPromptAction().showToast({ message: this.tl('Saved') });
       RouterUtil.back();
     } else {
-      promptAction.showToast({ message: this.tl('Failed') });
+      this.getUIContext().getPromptAction().showToast({ message: this.tl('Failed') });
     }
   }
 

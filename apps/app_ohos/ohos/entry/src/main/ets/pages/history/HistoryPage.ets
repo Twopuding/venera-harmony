@@ -7,9 +7,9 @@ import { NavigationMenus } from '../../navigation/NavigationMenus';
 import { ContentDialog } from '../../components/ContentDialog';
 import { RouterUtil } from '../../navigation/RouterUtil';
 import { TranslationUtil } from '../../utils/TranslationUtil';
-import promptAction from '@ohos.promptAction';
 import { common } from '@kit.AbilityKit';
 import { HdsNavigationMenuContentOptions } from '@kit.UIDesignKit';
+import { UiContextHolder } from '../../utils/UiContextHolder';
 
 @Entry
 @Component
@@ -20,7 +20,7 @@ struct HistoryPage {
   @State selectedKeys: string[] = []
   @State showClearDialog: boolean = false
   @State refreshingKey: string = ''
-  private context: common.UIAbilityContext = getContext(this) as common.UIAbilityContext
+  private context: common.UIAbilityContext = UiContextHolder.hostContext()
 
   aboutToAppear(): void {
     TranslationUtil.ensureLoaded(this.context);
@@ -96,10 +96,10 @@ struct HistoryPage {
     try {
       let ok: boolean = await DataService.getInstance().refreshHistory(item.id, item.sourceKey);
       if (ok) {
-        promptAction.showToast({ message: this.tr('Refresh Success') });
+        this.getUIContext().getPromptAction().showToast({ message: this.tr('Refresh Success') });
         await this.loadHistory();
       } else {
-        promptAction.showToast({ message: this.tr('Refresh Failed') });
+        this.getUIContext().getPromptAction().showToast({ message: this.tr('Refresh Failed') });
       }
     } finally {
       this.refreshingKey = '';

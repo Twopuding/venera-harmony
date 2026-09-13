@@ -1,4 +1,3 @@
-import router from '@ohos.router';
 import { DataService, CommentInfo, CommentsLoadResult } from '../../service/DataService';
 import { LoadingIndicator } from '../../components/LoadingIndicator';
 import { NetworkError } from '../../components/NetworkError';
@@ -6,6 +5,7 @@ import { ImmersivePageScaffold } from '../../components/ImmersivePageScaffold';
 import { RouterUtil } from '../../navigation/RouterUtil';
 import { RichCommentContent } from '../../components/RichCommentContent';
 import { TranslationUtil } from '../../utils/TranslationUtil';
+import { UiContextHolder } from '../../utils/UiContextHolder';
 
 @Entry
 @Component
@@ -23,7 +23,7 @@ struct CommentsPage {
   @State replyTo: string = ''
   @State replyUserName: string = ''
   @State parentComment: CommentInfo | null = null
-  private context = getContext(this)
+  private context = UiContextHolder.hostContext()
 
   private tr(key: string): string {
     return TranslationUtil.tl(key, this.context);
@@ -31,7 +31,7 @@ struct CommentsPage {
 
   aboutToAppear(): void {
     TranslationUtil.ensureLoaded(this.context);
-    let params = router.getParams() as Record<string, string>;
+    let params = this.getUIContext().getRouter().getParams() as Record<string, string>;
     this.comicId = params['comicId'] ?? '';
     this.sourceKey = params['sourceKey'] ?? '';
     this.replyTo = params['replyTo'] ?? '';

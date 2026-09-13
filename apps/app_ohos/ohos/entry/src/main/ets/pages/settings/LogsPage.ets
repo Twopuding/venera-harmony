@@ -11,13 +11,14 @@ import {
 } from '../../components/SettingsList';
 import { RouterUtil } from '../../navigation/RouterUtil';
 import { TranslationUtil } from '../../utils/TranslationUtil';
+import { UiContextHolder } from '../../utils/UiContextHolder';
 
 @Entry
 @Component
 struct LogsPage {
   @State logs: LogEntry[] = []
   @State isLoading: boolean = true
-  private context = getContext(this)
+  private context = UiContextHolder.hostContext()
 
   private tr(key: string): string {
     return TranslationUtil.tl(key, this.context);

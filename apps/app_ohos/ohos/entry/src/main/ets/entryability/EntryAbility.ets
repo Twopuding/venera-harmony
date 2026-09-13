@@ -17,6 +17,7 @@ import { PrivacyWindowUtil } from '../utils/PrivacyWindowUtil';
 import { AuthLifecycleUtil, AUTH_SESSION_VALID_KEY, AUTH_RESUME_PENDING_KEY } from '../utils/AuthLifecycleUtil';
 import { AuthGatePresenter } from '../utils/AuthGatePresenter';
 import { AuthSessionGuard } from '../utils/AuthSessionGuard';
+import { UiContextHolder } from '../utils/UiContextHolder';
 
 const TAG: string = 'EntryAbility';
 const DOMAIN: number = 0x0000;
@@ -49,6 +50,7 @@ export default class EntryAbility extends FlutterAbility {
 
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     super.onCreate(want, launchParam);
+    UiContextHolder.setHostContext(this.context);
     AuthLifecycleUtil.init(this);
     AuthGatePresenter.registerAbilityContext('EntryAbility', this.context);
     AuthGatePresenter.setForegroundAbility('EntryAbility');
@@ -57,6 +59,7 @@ export default class EntryAbility extends FlutterAbility {
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
     super.onWindowStageCreate(windowStage);
+    UiContextHolder.init(windowStage);
     AppStorage.setOrCreate<boolean>(AUTH_SESSION_VALID_KEY, false);
     AppStorage.setOrCreate<boolean>(AUTH_RESUME_PENDING_KEY, false);
     windowStage.getMainWindow().then((win: window.Window) => {
@@ -73,6 +76,7 @@ export default class EntryAbility extends FlutterAbility {
   }
 
   onForeground(): void {
+    UiContextHolder.setHostContext(this.context);
     AuthGatePresenter.setForegroundAbility('EntryAbility');
     hilog.info(DOMAIN, TAG, 'App moved to foreground');
   }

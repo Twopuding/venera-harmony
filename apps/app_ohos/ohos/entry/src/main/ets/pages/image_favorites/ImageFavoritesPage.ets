@@ -1,4 +1,3 @@
-import router from '@ohos.router';
 import { DataService, ImageFavoriteSummary } from '../../service/DataService';
 import { LoadingIndicator } from '../../components/LoadingIndicator';
 import { ImmersivePageScaffold } from '../../components/ImmersivePageScaffold';
@@ -6,6 +5,7 @@ import { NavigationMenus } from '../../navigation/NavigationMenus';
 import { RouterUtil } from '../../navigation/RouterUtil';
 import { TranslationUtil } from '../../utils/TranslationUtil';
 import { HdsNavigationMenuContentOptions } from '@kit.UIDesignKit';
+import { UiContextHolder } from '../../utils/UiContextHolder';
 
 @Entry
 @Component
@@ -18,7 +18,7 @@ struct ImageFavoritesPage {
   @State allItems: ImageFavoriteSummary[] = []
   @State sortType: string = 'title'
   @State minImageCount: number = 0
-  private context = getContext(this)
+  private context = UiContextHolder.hostContext()
 
   private tr(key: string): string {
     return TranslationUtil.tl(key, this.context);
@@ -26,7 +26,7 @@ struct ImageFavoritesPage {
 
   aboutToAppear(): void {
     TranslationUtil.ensureLoaded(this.context);
-    let params = router.getParams() as Record<string, string>;
+    let params = this.getUIContext().getRouter().getParams() as Record<string, string>;
     let keyword = params['initialKeyword'];
     if (keyword !== undefined && keyword.length > 0) {
       this.keyword = keyword;

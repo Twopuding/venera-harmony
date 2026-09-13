@@ -16,6 +16,7 @@ import {
   SHELL_CURRENT_TAB_KEY,
   SHELL_RESTORE_TAB_KEY
 } from '../utils/AuthResumeSnapshot';
+import { UiContextHolder } from '../utils/UiContextHolder';
 
 interface ShellTab {
   label: string;
@@ -70,7 +71,7 @@ export struct MainShell {
   @StorageLink(TranslationUtil.I18N_TICK) i18nTick: number = 0;
   @StorageLink(SafeAreaUtil.KEY_TOP) safeAreaTop: number = 0;
   @StorageLink(SafeAreaUtil.KEY_BOTTOM) safeAreaBottom: number = 0;
-  private context = getContext(this);
+  private context = UiContextHolder.hostContext();
 
   private tr(key: string): string {
     return TranslationUtil.tl(key, this.context);

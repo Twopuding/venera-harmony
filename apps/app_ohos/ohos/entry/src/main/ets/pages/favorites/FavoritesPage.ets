@@ -6,7 +6,7 @@ import { NetworkError } from '../../components/NetworkError';
 import { ContentDialogCustom } from '../../components/ContentDialog';
 import { RouterUtil } from '../../navigation/RouterUtil';
 import { TranslationUtil } from '../../utils/TranslationUtil';
-import promptAction from '@ohos.promptAction';
+import { UiContextHolder } from '../../utils/UiContextHolder';
 
 const LOCAL_ALL_FOLDER: string = '^_^[%local_all%]^_^';
 const TWO_PANEL_WIDTH: number = 720;
@@ -56,7 +56,7 @@ export struct FavoritesPage {
   }
 
   aboutToAppear(): void {
-    TranslationUtil.ensureLoaded(getContext(this) as Context);
+    TranslationUtil.ensureLoaded(UiContextHolder.hostContext() as Context);
     DataService.getInstance().getSettings().then((settings: Record<string, Object>) => {
       let mode = settings['onClickFavorite'];
       if (mode !== undefined && mode !== null) {
@@ -184,7 +184,7 @@ export struct FavoritesPage {
 
   private async deleteSelected(): Promise<void> {
     if (this.isNetworkMode || this.selectedFolder === LOCAL_ALL_FOLDER) {
-      promptAction.showToast({ message: this.tr('Select a folder first') });
+      this.getUIContext().getPromptAction().showToast({ message: this.tr('Select a folder first') });
       return;
     }
     let selected: Comic[] = this.getSelectedComics();
@@ -311,7 +311,7 @@ export struct FavoritesPage {
       return;
     }
     let count = await DataService.getInstance().downloadFavoriteComics(items);
-    promptAction.showToast({ message: this.trParam('Added @c comics to download queue.', 'c', count) });
+    this.getUIContext().getPromptAction().showToast({ message: this.trParam('Added @c comics to download queue.', 'c', count) });
     this.multiSelectMode = false;
     this.selectedKeys = [];
   }
@@ -326,7 +326,7 @@ export struct FavoritesPage {
         this.selectedFolder, selected[i].id, selected[i].sourceKey
       );
     }
-    promptAction.showToast({ message: this.tr('Updated') });
+    this.getUIContext().getPromptAction().showToast({ message: this.tr('Updated') });
     this.multiSelectMode = false;
     this.selectedKeys = [];
     await this.loadComics(1);
@@ -348,9 +348,9 @@ export struct FavoritesPage {
     }
     let result = await DataService.getInstance().exportComics(this.pendingExportItems, format);
     if (result.error !== undefined) {
-      promptAction.showToast({ message: result.error });
+      this.getUIContext().getPromptAction().showToast({ message: result.error });
     } else {
-      promptAction.showToast({ message: this.trParam('Exported @c comics', 'c', result.count ?? 0) });
+      this.getUIContext().getPromptAction().showToast({ message: this.trParam('Exported @c comics', 'c', result.count ?? 0) });
     }
     this.pendingExportItems = [];
     this.multiSelectMode = false;

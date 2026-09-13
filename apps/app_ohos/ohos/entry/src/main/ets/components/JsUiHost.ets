@@ -1,4 +1,3 @@
-import promptAction from '@ohos.promptAction';
 import { JsUiBridge } from '../bridge/JsUiBridge';
 import { ContentDialogCustom } from './ContentDialog';
 
@@ -60,7 +59,7 @@ export struct JsUiHost {
   onToastVersionChanged(): void {
     let message: string = AppStorage.get<string>('jsUiToast') ?? '';
     if (message.length > 0) {
-      promptAction.showToast({ message: message });
+      this.getUIContext().getPromptAction().showToast({ message: message });
     }
   }
 

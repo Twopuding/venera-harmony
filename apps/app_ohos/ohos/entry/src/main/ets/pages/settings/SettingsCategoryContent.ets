@@ -17,8 +17,8 @@ import { PlatformUtil } from '../../utils/PlatformUtil';
 import { PlatformBiometricAuth } from '../../bridge/PlatformBridge';
 import { SettingsMirror } from '../../utils/SettingsMirror';
 import { PROJECT_REPO_URL } from '../../utils/SettingsConstants';
-import promptAction from '@ohos.promptAction';
 import { common } from '@kit.AbilityKit';
+import { UiContextHolder } from '../../utils/UiContextHolder';
 
 interface SheetInfo {
   title: string;
@@ -65,7 +65,7 @@ export struct SettingsCategoryContent {
   @StorageLink('settingMirror_useFaceAuth') useFaceAuthOn: boolean = false
   @StorageLink('settingMirror_useFingerprintAuth') useFingerprintAuthOn: boolean = false
   private settingSaveInFlight: boolean = false
-  private context = getContext(this) as common.UIAbilityContext
+  private context = UiContextHolder.hostContext()
 
   aboutToAppear(): void {
     TranslationUtil.ensureLoaded(this.context);
@@ -138,7 +138,7 @@ export struct SettingsCategoryContent {
         }
       });
     }
-    ActionSheet.show({
+    this.getUIContext().showActionSheet({
       title: this.tl('Quick Favorite'),
       message: '',
       sheets: sheets
@@ -158,11 +158,11 @@ export struct SettingsCategoryContent {
   private async exportData(): Promise<void> {
     let path: string | null = await DataService.getInstance().exportAppData();
     if (path === null || path.length === 0) {
-      promptAction.showToast({ message: this.tl('Failed') });
+      this.getUIContext().getPromptAction().showToast({ message: this.tl('Failed') });
       return;
     }
     let saved: boolean = await PlatformUtil.saveFile(this.context, path, 'data.venera');
-    promptAction.showToast({
+    this.getUIContext().getPromptAction().showToast({
       message: saved ? this.tl('Export complete') : this.tl('Failed')
     });
   }
@@ -173,7 +173,7 @@ export struct SettingsCategoryContent {
       return;
     }
     let ok: boolean = await DataService.getInstance().importAppData(path);
-    promptAction.showToast({
+    this.getUIContext().getPromptAction().showToast({
       message: ok ? this.tl('Import complete') : this.tl('Failed')
     });
     if (ok) {
@@ -187,7 +187,7 @@ export struct SettingsCategoryContent {
 
   private async removeInvalidFavorites(): Promise<void> {
     let count: number = await DataService.getInstance().removeInvalidFavorites();
-    promptAction.showToast({
+    this.getUIContext().getPromptAction().showToast({
       message: TranslationUtil.tlParam('Deleted @a favorite items', 'a', count)
     });
   }
@@ -245,7 +245,7 @@ export struct SettingsCategoryContent {
     }
     if (key === 'authorizationRequired' && value === true) {
       if (!PlatformBiometricAuth.canCheckBiometrics() && !PlatformBiometricAuth.isDeviceSupported()) {
-        promptAction.showToast({ message: this.tl('Biometrics not supported') });
+        this.getUIContext().getPromptAction().showToast({ message: this.tl('Biometrics not supported') });
         return;
       }
     }
@@ -279,7 +279,7 @@ export struct SettingsCategoryContent {
     }
     if (!ok) {
       await this.loadSettings();
-      promptAction.showToast({ message: this.tl('Failed') });
+      this.getUIContext().getPromptAction().showToast({ message: this.tl('Failed') });
       return;
     }
     SettingsMirror.writeCache(this.settings);
@@ -310,7 +310,7 @@ export struct SettingsCategoryContent {
       };
       sheets.push(sheet);
     }
-    ActionSheet.show({
+    this.getUIContext().showActionSheet({
       title: this.tl(key),
       message: '',
       sheets: sheets
@@ -337,7 +337,7 @@ export struct SettingsCategoryContent {
         });
       }
     }
-    ActionSheet.show({
+    this.getUIContext().showActionSheet({
       title: this.tl('Default Search Target'),
       message: '',
       sheets: sheets

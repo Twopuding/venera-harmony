@@ -4,8 +4,8 @@ import { PlatformUtil } from '../utils/PlatformUtil';
 import { TranslationUtil } from '../utils/TranslationUtil';
 import { IMPORT_COMIC_HELP_URL } from '../utils/SettingsConstants';
 import { RouterUtil } from '../navigation/RouterUtil';
-import promptAction from '@ohos.promptAction';
 import { common } from '@kit.AbilityKit';
+import { UiContextHolder } from '../utils/UiContextHolder';
 
 interface FolderSelectOption {
   value: string;
@@ -38,7 +38,7 @@ export struct ImportComicsDialog {
   @State folders: string[] = []
   @State selectedFolder: string = ''
   @State copyToLocal: boolean = true
-  private context = getContext(this) as common.UIAbilityContext
+  private context = UiContextHolder.hostContext()
 
   aboutToAppear(): void {
     TranslationUtil.ensureLoaded(this.context);
@@ -91,7 +91,7 @@ export struct ImportComicsDialog {
       let error = await DataService.getInstance().importLocalComic('scan');
       this.isLoading = false;
       if (error !== null) {
-        promptAction.showToast({ message: error });
+        this.getUIContext().getPromptAction().showToast({ message: error });
       } else {
         this.show = false;
         this.onImported();
@@ -129,7 +129,7 @@ export struct ImportComicsDialog {
     );
     this.isLoading = false;
     if (error !== null) {
-      promptAction.showToast({ message: error });
+      this.getUIContext().getPromptAction().showToast({ message: error });
     } else {
       this.show = false;
       this.onImported();

@@ -3,6 +3,7 @@ import { window } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { PrivacyWindowUtil } from '../utils/PrivacyWindowUtil';
 import { AuthGatePresenter } from '../utils/AuthGatePresenter';
+import { UiContextHolder } from '../utils/UiContextHolder';
 
 const TAG: string = 'WebViewAbility';
 const DOMAIN: number = 0x0000;
@@ -11,6 +12,7 @@ const STORAGE_KEY_URL: string = 'webview_target_url';
 export default class WebViewAbility extends UIAbility {
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     hilog.info(DOMAIN, TAG, 'WebViewAbility onCreate');
+    UiContextHolder.setHostContext(this.context);
     AuthGatePresenter.registerAbilityContext('WebViewAbility', this.context);
     let storedUrl: string | undefined = AppStorage.get<string>(STORAGE_KEY_URL);
     let url: string = storedUrl !== undefined ? storedUrl : '';
@@ -19,6 +21,7 @@ export default class WebViewAbility extends UIAbility {
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
     hilog.info(DOMAIN, TAG, 'WebViewAbility onWindowStageCreate');
+    UiContextHolder.init(windowStage);
     windowStage.loadContent('pages/WebViewPage', (err, data) => {
       if (err.code) {
         hilog.error(DOMAIN, TAG, 'Failed to load WebViewPage: ' + err.message);
@@ -37,6 +40,7 @@ export default class WebViewAbility extends UIAbility {
   }
 
   onForeground(): void {
+    UiContextHolder.setHostContext(this.context);
     AuthGatePresenter.setForegroundAbility('WebViewAbility');
     hilog.info(DOMAIN, TAG, 'WebViewAbility onForeground');
   }

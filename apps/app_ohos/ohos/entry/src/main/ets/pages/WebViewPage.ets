@@ -1,13 +1,12 @@
 import { webview } from '@kit.ArkWeb';
-import router from '@ohos.router';
 import { WebViewBridge } from '../bridge/WebViewBridge';
 import { DataService } from '../service/DataService';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { common } from '@kit.AbilityKit';
 import { LoadingIndicator } from '../components/LoadingIndicator';
 import { AuthSessionGuard } from '../utils/AuthSessionGuard';
-import promptAction from '@ohos.promptAction';
 import { TranslationUtil } from '../utils/TranslationUtil';
+import { UiContextHolder } from '../utils/UiContextHolder';
 
 const TAG: string = 'WebViewPage';
 const DOMAIN: number = 0x0000;
@@ -34,7 +33,7 @@ struct WebViewPage {
   @State loginCompleted: boolean = false;
   private controller: webview.WebviewController = new webview.WebviewController();
   private bridge: WebViewBridge = WebViewBridge.getInstance();
-  private context = getContext(this) as common.UIAbilityContext;
+  private context = UiContextHolder.hostContext();
 
   aboutToAppear(): void {
     this.authBlocked = AuthSessionGuard.shouldBlock();
@@ -43,7 +42,7 @@ struct WebViewPage {
       return;
     }
     TranslationUtil.ensureLoaded(this.context);
-    let params = router.getParams() as WebViewRouteParams;
+    let params = this.getUIContext().getRouter().getParams() as WebViewRouteParams;
     if (params?.url !== undefined && params.url.length > 0) {
       this.pageUrl = params.url;
       this.openedViaRouter = true;
@@ -186,7 +185,7 @@ struct WebViewPage {
 
   private onClose(): void {
     if (this.openedViaRouter) {
-      router.back();
+      this.getUIContext().getRouter().back();
       return;
     }
     let context: common.UIAbilityContext = this.getUIContext().getHostContext() as common.UIAbilityContext;
@@ -207,7 +206,7 @@ struct WebViewPage {
       return;
     }
     this.loginCompleted = true;
-    promptAction.showToast({
+    this.getUIContext().getPromptAction().showToast({
       message: TranslationUtil.tl('Success', this.context)
     });
     this.onClose();

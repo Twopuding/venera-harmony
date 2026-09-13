@@ -1,6 +1,7 @@
 import { DataService } from '../service/DataService';
 import { PlatformBiometricAuth } from '../bridge/PlatformBridge';
 import { TranslationUtil } from '../utils/TranslationUtil';
+import { UiContextHolder } from '../utils/UiContextHolder';
 
 @Component
 export struct AuthGate {
@@ -8,7 +9,7 @@ export struct AuthGate {
   @Prop @Watch('onPageShowTick') pageShowTick: number = 0
   @State isAuthenticating: boolean = false
   @State message: string = ''
-  private context = getContext(this)
+  private context = UiContextHolder.hostContext()
 
   aboutToAppear(): void {
     TranslationUtil.ensureLoaded(this.context);

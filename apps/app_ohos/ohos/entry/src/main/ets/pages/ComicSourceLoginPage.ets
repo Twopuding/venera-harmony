@@ -1,4 +1,3 @@
-import router from '@ohos.router';
 import {
   AccountInfoItemData,
   ComicSourceAccountConfig,
@@ -10,8 +9,8 @@ import { SettingTile } from '../components/SettingsList';
 import { HdsTheme } from '../design/HdsTheme';
 import { RouterUtil } from '../navigation/RouterUtil';
 import { TranslationUtil } from '../utils/TranslationUtil';
-import promptAction from '@ohos.promptAction';
 import { common } from '@kit.AbilityKit';
+import { UiContextHolder } from '../utils/UiContextHolder';
 
 @Entry
 @Component
@@ -24,11 +23,11 @@ struct ComicSourceLoginPage {
   @State cookieValues: string[] = []
   @State isLoading: boolean = true
   @State isSubmitting: boolean = false
-  private context = getContext(this) as common.UIAbilityContext
+  private context = UiContextHolder.hostContext()
 
   aboutToAppear(): void {
     TranslationUtil.ensureLoaded(this.context);
-    let params = router.getParams() as Record<string, string>;
+    let params = this.getUIContext().getRouter().getParams() as Record<string, string>;
     this.sourceKey = params['sourceKey'] ?? '';
     this.sourceName = params['sourceName'] ?? this.sourceKey;
     this.loadConfig();
@@ -83,10 +82,10 @@ struct ComicSourceLoginPage {
     }
     this.isSubmitting = false;
     if (error !== null) {
-      promptAction.showToast({ message: error });
+      this.getUIContext().getPromptAction().showToast({ message: error });
       return;
     }
-    promptAction.showToast({ message: this.tl('Success') });
+    this.getUIContext().getPromptAction().showToast({ message: this.tl('Success') });
     RouterUtil.back();
   }
 

@@ -18,8 +18,8 @@ import {
   COMIC_SOURCE_HELP_URL,
   DEFAULT_COMIC_SOURCE_LIST_URL
 } from '../utils/SettingsConstants';
-import promptAction from '@ohos.promptAction';
 import { common } from '@kit.AbilityKit';
+import { UiContextHolder } from '../utils/UiContextHolder';
 
 @Entry
 @Component
@@ -31,7 +31,7 @@ struct ComicSourceListPage {
   @State urlChanged: boolean = false
   @State addingKey: string = ''
   private scroller: Scroller = new Scroller()
-  private context = getContext(this) as common.UIAbilityContext
+  private context = UiContextHolder.hostContext()
 
   aboutToAppear(): void {
     TranslationUtil.ensureLoaded(this.context);
@@ -89,7 +89,7 @@ struct ComicSourceListPage {
         await DataService.getInstance().fetchComicSourceCatalogResult(url);
       if (result.error !== undefined && result.error.length > 0) {
         this.entries = [];
-        promptAction.showToast({
+        this.getUIContext().getPromptAction().showToast({
           message: result.error === 'Network error'
             ? this.tl('Network error')
             : result.error
@@ -126,7 +126,7 @@ struct ComicSourceListPage {
     }
     let url = this.resolveDownloadUrl(entry);
     if (url.length === 0) {
-      promptAction.showToast({ message: this.tl('Failed') });
+      this.getUIContext().getPromptAction().showToast({ message: this.tl('Failed') });
       return;
     }
     this.addingKey = entry.key;
@@ -134,9 +134,9 @@ struct ComicSourceListPage {
     this.addingKey = '';
     if (key !== null) {
       await this.refreshInstalledKeys();
-      promptAction.showToast({ message: this.tl('Added') });
+      this.getUIContext().getPromptAction().showToast({ message: this.tl('Added') });
     } else {
-      promptAction.showToast({ message: this.tl('Failed') });
+      this.getUIContext().getPromptAction().showToast({ message: this.tl('Failed') });
     }
   }
 

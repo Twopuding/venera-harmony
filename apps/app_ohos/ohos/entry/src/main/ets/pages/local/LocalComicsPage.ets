@@ -10,6 +10,7 @@ import { ContentDialog, ContentDialogCustom } from '../../components/ContentDial
 import { RouterUtil } from '../../navigation/RouterUtil';
 import { PlatformUtil } from '../../utils/PlatformUtil';
 import { TranslationUtil } from '../../utils/TranslationUtil';
+import { UiContextHolder } from '../../utils/UiContextHolder';
 
 @Entry
 @Component
@@ -27,7 +28,7 @@ struct LocalComicsPage {
   @State showImportDialog: boolean = false
   @State showExportDialog: boolean = false
   private pendingExportItems: ExportComicItem[] = []
-  private context: common.UIAbilityContext = getContext(this) as common.UIAbilityContext
+  private context: common.UIAbilityContext = UiContextHolder.hostContext()
 
   private tr(key: string): string {
     return TranslationUtil.tl(key, this.context);

@@ -4,6 +4,7 @@ import { LoadingIndicator } from '../../components/LoadingIndicator';
 import { ImmersivePageScaffold } from '../../components/ImmersivePageScaffold';
 import { RouterUtil } from '../../navigation/RouterUtil';
 import { TranslationUtil } from '../../utils/TranslationUtil';
+import { UiContextHolder } from '../../utils/UiContextHolder';
 
 @Entry
 @Component
@@ -13,7 +14,7 @@ struct DownloadingPage {
   @State isRefreshing: boolean = false
   @StorageLink('dataEventVersion') @Watch('onDataEventChanged') dataEventVersion: number = 0
   private pollTimer: number = -1
-  private context = getContext(this)
+  private context = UiContextHolder.hostContext()
 
   private tr(key: string): string {
     return TranslationUtil.tl(key, this.context);

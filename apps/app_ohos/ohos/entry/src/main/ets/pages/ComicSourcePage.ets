@@ -18,7 +18,7 @@ import { HdsTheme } from '../design/HdsTheme';
 import { PlatformUtil } from '../utils/PlatformUtil';
 import { COMIC_SOURCE_HELP_URL } from '../utils/SettingsConstants';
 import { common } from '@kit.AbilityKit';
-import promptAction from '@ohos.promptAction';
+import { UiContextHolder } from '../utils/UiContextHolder';
 
 interface SettingSelectOption {
   value: string;
@@ -48,7 +48,7 @@ struct ComicSourcePage {
   @State inputValidator: string = ''
   @State callbackLoadingKey: string = ''
   private scroller: Scroller = new Scroller()
-  private context = getContext(this) as common.UIAbilityContext
+  private context = UiContextHolder.hostContext()
 
   aboutToAppear(): void {
     TranslationUtil.ensureLoaded(this.context);
@@ -106,7 +106,7 @@ struct ComicSourcePage {
     }
     let content: string = PlatformUtil.readTextFile(path);
     if (content.length === 0) {
-      promptAction.showToast({ message: this.tl('Failed') });
+      this.getUIContext().getPromptAction().showToast({ message: this.tl('Failed') });
       return;
     }
     let fileName: string = PlatformUtil.fileNameFromPath(path);
@@ -115,9 +115,9 @@ struct ComicSourcePage {
     this.isAdding = false;
     if (key !== null) {
       await this.loadSources();
-      promptAction.showToast({ message: this.tl('Added') });
+      this.getUIContext().getPromptAction().showToast({ message: this.tl('Added') });
     } else {
-      promptAction.showToast({ message: this.tl('Failed') });
+      this.getUIContext().getPromptAction().showToast({ message: this.tl('Failed') });
     }
   }
 
@@ -153,7 +153,7 @@ struct ComicSourcePage {
     }
     this.isBatchUpdating = false;
     await this.loadSources();
-    promptAction.showToast({ message: this.tl('Updated') });
+    this.getUIContext().getPromptAction().showToast({ message: this.tl('Updated') });
   }
 
   private confirmDelete(source: ComicSourceInfo): void {
@@ -167,7 +167,7 @@ struct ComicSourcePage {
       let error = await DataService.getInstance().comicSourceRelogin(source.key);
       if (error === null) {
         await this.loadSources();
-        promptAction.showToast({ message: this.tl('Success') });
+        this.getUIContext().getPromptAction().showToast({ message: this.tl('Success') });
         return;
       }
     }
@@ -180,7 +180,7 @@ struct ComicSourcePage {
     if (ok) {
       await this.loadSources();
     } else {
-      promptAction.showToast({ message: this.tl('Failed') });
+      this.getUIContext().getPromptAction().showToast({ message: this.tl('Failed') });
     }
   }
 
@@ -197,7 +197,7 @@ struct ComicSourcePage {
       try {
         let regex = new RegExp(this.inputValidator);
         if (!regex.test(this.inputSettingValue)) {
-          promptAction.showToast({ message: this.tl('Failed') });
+          this.getUIContext().getPromptAction().showToast({ message: this.tl('Failed') });
           return;
         }
       } catch (_) {
@@ -218,7 +218,7 @@ struct ComicSourcePage {
     );
     this.callbackLoadingKey = '';
     if (error !== null) {
-      promptAction.showToast({ message: error });
+      this.getUIContext().getPromptAction().showToast({ message: error });
     }
   }
 
@@ -419,9 +419,9 @@ struct ComicSourcePage {
     let ok = await DataService.getInstance().updateComicSource(key);
     if (ok) {
       await this.loadSources();
-      promptAction.showToast({ message: this.tl('Updated') });
+      this.getUIContext().getPromptAction().showToast({ message: this.tl('Updated') });
     } else {
-      promptAction.showToast({ message: this.tl('Failed') });
+      this.getUIContext().getPromptAction().showToast({ message: this.tl('Failed') });
     }
   }
 

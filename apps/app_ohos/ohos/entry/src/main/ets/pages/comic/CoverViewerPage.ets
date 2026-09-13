@@ -1,10 +1,8 @@
-import router from '@ohos.router';
 
 import { common } from '@kit.AbilityKit';
 
 import { util } from '@kit.ArkTS';
 
-import promptAction from '@ohos.promptAction';
 
 import { ComicCoverImage } from '../../components/ComicCoverImage';
 
@@ -19,6 +17,7 @@ import { TranslationUtil } from '../../utils/TranslationUtil';
 import { LoadingIndicator } from '../../components/LoadingIndicator';
 
 import { AuthSessionGuard } from '../../utils/AuthSessionGuard';
+import { UiContextHolder } from '../../utils/UiContextHolder';
 
 
 
@@ -38,7 +37,7 @@ struct CoverViewerPage {
 
   @State authBlocked: boolean = false
 
-  private context: common.UIAbilityContext = getContext(this) as common.UIAbilityContext
+  private context: common.UIAbilityContext = UiContextHolder.hostContext()
 
 
 
@@ -56,7 +55,7 @@ struct CoverViewerPage {
 
     TranslationUtil.ensureLoaded(this.context);
 
-    let params = router.getParams() as Record<string, string>;
+    let params = this.getUIContext().getRouter().getParams() as Record<string, string>;
 
     this.cover = params['cover'] ?? '';
 
@@ -96,7 +95,7 @@ struct CoverViewerPage {
 
       if (base64 === null || base64.length === 0) {
 
-        promptAction.showToast({ message: this.tr('Error') });
+        this.getUIContext().getPromptAction().showToast({ message: this.tr('Error') });
 
         return;
 
@@ -110,7 +109,7 @@ struct CoverViewerPage {
 
       let ok: boolean = await PlatformUtil.saveBytes(this.context, bytes, fileName);
 
-      promptAction.showToast({ message: ok ? this.tr('Saved') : this.tr('Error') });
+      this.getUIContext().getPromptAction().showToast({ message: ok ? this.tr('Saved') : this.tr('Error') });
 
     } finally {
 

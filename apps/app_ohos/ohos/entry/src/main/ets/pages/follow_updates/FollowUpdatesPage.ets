@@ -10,7 +10,7 @@ import { NavigationMenus } from '../../navigation/NavigationMenus';
 import { ContentDialogCustom } from '../../components/ContentDialog';
 import { HdsTheme } from '../../design/HdsTheme';
 import { HdsNavigationMenuContentOptions } from '@kit.UIDesignKit';
-import promptAction from '@ohos.promptAction';
+import { UiContextHolder } from '../../utils/UiContextHolder';
 
 @Entry
 @Component
@@ -23,7 +23,7 @@ struct FollowUpdatesPage {
   @State folders: string[] = []
   @State selectedFolder: string = ''
   private scroller: Scroller = new Scroller()
-  private context = getContext(this)
+  private context = UiContextHolder.hostContext()
 
   aboutToAppear(): void {
     TranslationUtil.ensureLoaded(this.context);
@@ -47,7 +47,7 @@ struct FollowUpdatesPage {
   private async openFolderSelector(): Promise<void> {
     this.folders = await DataService.getInstance().getFavoriteFolders();
     if (this.folders.length === 0) {
-      promptAction.showToast({ message: this.tl('No folders available') });
+      this.getUIContext().getPromptAction().showToast({ message: this.tl('No folders available') });
       return;
     }
     this.selectedFolder = this.summary.folder ?? this.folders[0];
@@ -61,7 +61,7 @@ struct FollowUpdatesPage {
     let ok = await DataService.getInstance().setFollowUpdatesFolder(this.selectedFolder);
     this.showFolderDialog = false;
     if (!ok) {
-      promptAction.showToast({ message: this.tl('Failed') });
+      this.getUIContext().getPromptAction().showToast({ message: this.tl('Failed') });
       return;
     }
     await this.loadData();

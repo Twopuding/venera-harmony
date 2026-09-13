@@ -1,4 +1,3 @@
-import router from '@ohos.router';
 import { DataService, ImageFavoriteImage } from '../../service/DataService';
 import { ReaderImage } from '../../components/ReaderImage';
 import { LoadingIndicator } from '../../components/LoadingIndicator';
@@ -18,7 +17,7 @@ struct ImageFavoritesPhotoPage {
   private swiperController: SwiperController = new SwiperController()
 
   aboutToAppear(): void {
-    let params = router.getParams() as Record<string, string>;
+    let params = this.getUIContext().getRouter().getParams() as Record<string, string>;
     this.comicId = params['comicId'] ?? '';
     this.sourceKey = params['sourceKey'] ?? '';
     this.title = params['title'] ?? '';

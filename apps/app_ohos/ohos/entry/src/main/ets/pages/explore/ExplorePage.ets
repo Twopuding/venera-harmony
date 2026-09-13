@@ -8,6 +8,7 @@ import { TranslationUtil } from '../../utils/TranslationUtil';
 import { MultiPagesFilterDialog, PageOption, PageOptionsBuilder } from '../../components/MultiPagesFilter';
 import { ShellEvents } from '../../utils/ShellEvents';
 import { DisplaySettings } from '../../utils/DisplaySettings';
+import { UiContextHolder } from '../../utils/UiContextHolder';
 
 @Component
 struct ExploreTabPanel {
@@ -142,7 +143,7 @@ export struct ExplorePage {
   private lastAddPageCounter: number = 0
 
   aboutToAppear(): void {
-    TranslationUtil.ensureLoaded(getContext(this) as Context);
+    TranslationUtil.ensureLoaded(UiContextHolder.hostContext() as Context);
     DisplaySettings.getInstance().refresh();
     this.loadConfig();
   }

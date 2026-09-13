@@ -13,6 +13,7 @@ import { RouterUtil } from '../../navigation/RouterUtil';
 import { TranslationUtil } from '../../utils/TranslationUtil';
 import { MultiPagesFilterDialog, PageOptionsBuilder } from '../../components/MultiPagesFilter';
 import { ShellEvents } from '../../utils/ShellEvents';
+import { UiContextHolder } from '../../utils/UiContextHolder';
 
 @Component
 struct CategoryTabContent {
@@ -203,7 +204,7 @@ export struct CategoriesPage {
   private lastAddPageCounter: number = 0
 
   aboutToAppear(): void {
-    TranslationUtil.ensureLoaded(getContext(this) as Context);
+    TranslationUtil.ensureLoaded(UiContextHolder.hostContext() as Context);
     this.loadConfig();
   }
 

@@ -18,7 +18,7 @@ import { ContentDialog } from '../../components/ContentDialog';
 import { RouterUtil } from '../../navigation/RouterUtil';
 import { TranslationUtil } from '../../utils/TranslationUtil';
 import { ShellEvents } from '../../utils/ShellEvents';
-import promptAction from '@ohos.promptAction';
+import { UiContextHolder } from '../../utils/UiContextHolder';
 
 interface ChartEntry {
   label: string;
@@ -49,7 +49,7 @@ export struct HomePage {
   @StorageLink(ShellEvents.HOME_RELOAD) @Watch('onHomeReload') homeReloadTick: number = 0
   @StorageLink(TranslationUtil.I18N_TICK) i18nTick: number = 0
   private scroller: Scroller = new Scroller()
-  private context = getContext(this) as Context
+  private context = UiContextHolder.hostContext() as Context
   private loadGeneration: number = 0
 
   aboutToAppear(): void {
@@ -115,7 +115,7 @@ export struct HomePage {
       this.comicSourceUpdateCount = sources.updateCount;
     } catch (e) {
       if (generation === this.loadGeneration) {
-        promptAction.showToast({ message: this.tr('Failed to load') });
+        this.getUIContext().getPromptAction().showToast({ message: this.tr('Failed to load') });
       }
     } finally {
       if (generation === this.loadGeneration) {
@@ -186,7 +186,7 @@ export struct HomePage {
     this.syncStatus = await DataService.getInstance().getSyncStatus();
     this.isSyncBusy = false;
     if (error !== null) {
-      promptAction.showToast({ message: error });
+      this.getUIContext().getPromptAction().showToast({ message: error });
     }
   }
 
@@ -196,7 +196,7 @@ export struct HomePage {
     this.syncStatus = await DataService.getInstance().getSyncStatus();
     this.isSyncBusy = false;
     if (error !== null) {
-      promptAction.showToast({ message: error });
+      this.getUIContext().getPromptAction().showToast({ message: error });
     }
   }
 

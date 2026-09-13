@@ -3,6 +3,7 @@ import { window } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { PrivacyWindowUtil } from '../utils/PrivacyWindowUtil';
 import { AuthGatePresenter } from '../utils/AuthGatePresenter';
+import { UiContextHolder } from '../utils/UiContextHolder';
 
 const DOMAIN = 0x0000;
 const TAG = 'ReaderAbility';
@@ -14,6 +15,7 @@ export default class ReaderAbility extends UIAbility {
 
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     hilog.info(DOMAIN, TAG, 'ReaderAbility onCreate');
+    UiContextHolder.setHostContext(this.context);
     AuthGatePresenter.registerAbilityContext('ReaderAbility', this.context);
 
     const params = want.parameters;
@@ -54,6 +56,7 @@ export default class ReaderAbility extends UIAbility {
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
     hilog.info(DOMAIN, TAG, 'ReaderAbility onWindowStageCreate');
+    UiContextHolder.init(windowStage);
 
     windowStage.getMainWindow().then((win: window.Window) => {
       this.win = win;
@@ -62,9 +65,9 @@ export default class ReaderAbility extends UIAbility {
       win.setWindowLayoutFullScreen(true).then(() => {
         hilog.info(DOMAIN, TAG, 'Set full screen success');
         const systemArea: window.AvoidArea = win.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM);
-        this.safeAreaTop = px2vp(systemArea.topRect.height);
+        this.safeAreaTop = win.getUIContext().px2vp(systemArea.topRect.height);
         const navArea: window.AvoidArea = win.getWindowAvoidArea(window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR);
-        this.safeAreaBottom = px2vp(navArea.bottomRect.height);
+        this.safeAreaBottom = win.getUIContext().px2vp(navArea.bottomRect.height);
 
         AppStorage.setOrCreate('reader_safeAreaTop', this.safeAreaTop);
         AppStorage.setOrCreate('reader_safeAreaBottom', this.safeAreaBottom);
@@ -108,6 +111,7 @@ export default class ReaderAbility extends UIAbility {
   }
 
   onForeground(): void {
+    UiContextHolder.setHostContext(this.context);
     AuthGatePresenter.setForegroundAbility('ReaderAbility');
     hilog.info(DOMAIN, TAG, 'ReaderAbility onForeground');
   }

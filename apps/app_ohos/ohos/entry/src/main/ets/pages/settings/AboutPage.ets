@@ -8,7 +8,7 @@ import { SettingsSection, ActionSettingTile } from '../../components/SettingsLis
 import { PROJECT_REPO_URL } from '../../utils/SettingsConstants';
 import { PlatformUtil } from '../../utils/PlatformUtil';
 import { common } from '@kit.AbilityKit';
-import promptAction from '@ohos.promptAction';
+import { UiContextHolder } from '../../utils/UiContextHolder';
 
 @Entry
 @Component
@@ -17,7 +17,7 @@ struct AboutPage {
   @State isCheckingUpdate: boolean = false
   @State showUpdateDialog: boolean = false
   @State latestVersion: string = ''
-  private context: common.UIAbilityContext = getContext(this) as common.UIAbilityContext
+  private context: common.UIAbilityContext = UiContextHolder.hostContext()
 
   aboutToAppear(): void {
     TranslationUtil.ensureLoaded(this.context);
@@ -46,7 +46,7 @@ struct AboutPage {
         this.latestVersion = result.latestVersion ?? '';
         this.showUpdateDialog = true;
       } else {
-        promptAction.showToast({ message: this.tr('No new version available') });
+        this.getUIContext().getPromptAction().showToast({ message: this.tr('No new version available') });
       }
     } finally {
       this.isCheckingUpdate = false;

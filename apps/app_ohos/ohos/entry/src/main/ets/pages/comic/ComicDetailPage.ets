@@ -1,4 +1,3 @@
-import router from '@ohos.router';
 import { common } from '@kit.AbilityKit';
 import {
   DataService,
@@ -21,6 +20,7 @@ import { ContentDialogCustom } from '../../components/ContentDialog';
 import { RouterUtil } from '../../navigation/RouterUtil';
 import { HdsTheme } from '../../design/HdsTheme';
 import { PlatformUtil } from '../../utils/PlatformUtil';
+import { UiContextHolder } from '../../utils/UiContextHolder';
 
 @Entry
 @Component
@@ -58,11 +58,11 @@ struct ComicDetailPage {
   @State chapterModel: ComicChapters | null = null
   @State expandedGroups: string[] = []
   private scroller: Scroller = new Scroller()
-  private context: common.UIAbilityContext = getContext(this) as common.UIAbilityContext
+  private context: common.UIAbilityContext = UiContextHolder.hostContext()
 
   aboutToAppear(): void {
     TranslationUtil.ensureLoaded(this.context);
-    let params = router.getParams() as Record<string, string>;
+    let params = this.getUIContext().getRouter().getParams() as Record<string, string>;
     this.comicId = params['comicId'] ?? '';
     this.sourceKey = params['sourceKey'] ?? '';
     this.loadComic();

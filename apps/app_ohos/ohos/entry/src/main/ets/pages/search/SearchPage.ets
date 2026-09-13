@@ -5,6 +5,7 @@ import { NavigationMenus } from '../../navigation/NavigationMenus';
 import { RouterUtil } from '../../navigation/RouterUtil';
 import { TranslationUtil } from '../../utils/TranslationUtil';
 import { HdsNavigationMenuContentOptions } from '@kit.UIDesignKit';
+import { UiContextHolder } from '../../utils/UiContextHolder';
 
 @Entry
 @Component
@@ -19,7 +20,7 @@ struct SearchPage {
   @State showSuggestions: boolean = false
 
   private suggestionTimer: number = -1
-  private context = getContext(this)
+  private context = UiContextHolder.hostContext()
 
   private tr(key: string): string {
     return TranslationUtil.tl(key, this.context);
