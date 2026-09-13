@@ -8,6 +8,9 @@ import 'package:venera/utils/io.dart';
 import 'base_image_provider.dart';
 import 'reader_image.dart' as image_provider;
 import 'package:venera/foundation/appdata.dart';
+import 'package:venera/foundation/app.dart';
+import 'package:venera/platform/ohos_super_resolution.dart';
+import 'package:venera/foundation/cache_manager.dart';
 
 class ReaderImageProvider
     extends BaseImageProvider<image_provider.ReaderImageProvider> {
@@ -26,6 +29,8 @@ class ReaderImageProvider
 
   @override
   final bool enableResize;
+
+  static void Function(String status, int page)? onSrStatusChanged;
 
   @override
   Future<Uint8List> load(chunkEvents, checkStop) async {
@@ -54,10 +59,44 @@ class ReaderImageProvider
     if (imageBytes == null) {
       throw "Error: Empty response body.";
     }
+    var processedBytes = imageBytes!;
+    var srEnabled = appdata.settings.getReaderSetting(cid, sourceKey ?? '', 'enableAiSuperResolution');
+    debugPrint('[ReaderImage] SR check: enabled=$srEnabled, isOhos=${App.isOhos}, page=$page');
+    if (srEnabled == true && App.isOhos) {
+      try {
+        var srCacheKey = 'sr_cv@$imageKey@$sourceKey@$cid@$eid';
+        var srCache = await CacheManager().findCache(srCacheKey);
+        if (srCache != null) {
+          var srCachedBytes = await srCache.readAsBytes();
+          if (srCachedBytes.isNotEmpty) {
+            debugPrint('[ReaderImage] SR cache hit for page $page');
+            processedBytes = Uint8List.fromList(srCachedBytes);
+            onSrStatusChanged?.call('done', page);
+          }
+        } else {
+          checkStop();
+          debugPrint('[ReaderImage] SR processing page $page, inputSize=${processedBytes.length}');
+          onSrStatusChanged?.call('processing', page);
+          var srResult = await OhosSuperResolution.processImage(processedBytes);
+          debugPrint('[ReaderImage] SR result for page $page: ${srResult != null ? '${srResult.length} bytes' : 'null'}');
+          if (srResult != null) {
+            processedBytes = srResult;
+            onSrStatusChanged?.call('done', page);
+            try {
+              await CacheManager().writeCache(srCacheKey, srResult);
+            } catch (_) {}
+          } else {
+            onSrStatusChanged?.call('off', page);
+          }
+        }
+      } catch (_) {
+        onSrStatusChanged?.call('off', page);
+      }
+    }
     if (appdata.settings['enableCustomImageProcessing']) {
       var script = appdata.settings['customImageProcessing'].toString();
       if (!script.contains('function processImage')) {
-        return imageBytes;
+        return processedBytes;
       }
       var func = JsEngine().runCode('''
         (() => {
@@ -67,18 +106,18 @@ class ReaderImageProvider
       ''');
       if (func is JSInvokable) {
         var autoFreeFunc = JSAutoFreeFunction(func);
-        var result = autoFreeFunc([imageBytes, cid, eid, page, sourceKey]);
+        var result = autoFreeFunc([processedBytes, cid, eid, page, sourceKey]);
         if (result is Uint8List) {
-          imageBytes = result;
+          processedBytes = result;
         } else if (result is Future) {
           var futureResult = await result;
           if (futureResult is Uint8List) {
-            imageBytes = futureResult;
+            processedBytes = futureResult;
           }
         } else if (result is Map) {
           var image = result['image'];
           if (image is Uint8List) {
-            imageBytes = image;
+            processedBytes = image;
           } else if (image is Future) {
             JSAutoFreeFunction? onCancel;
             if (result['onCancel'] is JSInvokable) {
@@ -87,7 +126,7 @@ class ReaderImageProvider
             if (onCancel == null) {
               var futureImage = await image;
               if (futureImage is Uint8List) {
-                imageBytes = futureImage;
+                processedBytes = futureImage;
               }
             } else {
               dynamic futureImage;
@@ -106,14 +145,14 @@ class ReaderImageProvider
                 await Future.delayed(Duration(milliseconds: 50));
               }
               if (futureImage is Uint8List) {
-                imageBytes = futureImage;
+                processedBytes = futureImage;
               }
             }
           }
         }
       }
     }
-    return imageBytes!;
+    return processedBytes;
   }
 
   @override

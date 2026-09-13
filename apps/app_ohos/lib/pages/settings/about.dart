@@ -69,14 +69,7 @@ class _AboutSettingsState extends State<AboutSettings> {
           title: const Text("Github"),
           trailing: const Icon(Icons.open_in_new),
           onTap: () {
-            OhosUrlLauncher.launchUrlString("https://github.com/venera-app/venera");
-          },
-        ).toSliver(),
-        ListTile(
-          title: const Text("Telegram"),
-          trailing: const Icon(Icons.open_in_new),
-          onTap: () {
-            OhosUrlLauncher.launchUrlString("https://t.me/venera_release");
+            OhosUrlLauncher.launchUrlString("https://github.com/Twopuding/venera-harmony");
           },
         ).toSliver(),
       ],
@@ -85,12 +78,15 @@ class _AboutSettingsState extends State<AboutSettings> {
 }
 
 Future<bool> checkUpdate() async {
-  var res = await AppDio()
-      .get("https://cdn.jsdelivr.net/gh/venera-app/venera@master/pubspec.yaml");
+  var res = await AppDio().get(
+    "https://api.github.com/repos/Twopuding/venera-harmony/releases/latest"
+  );
   if (res.statusCode == 200) {
-    var data = loadYaml(res.data);
-    if (data["version"] != null) {
-      return _compareVersion(data["version"].split("+")[0], App.version);
+    var data = res.data;
+    if (data["tag_name"] != null) {
+      String tagName = data["tag_name"];
+      String version = tagName.substring(1).replaceAll("-ohos", "");
+      return _compareVersion(version, App.version);
     }
   }
   return false;
@@ -117,7 +113,7 @@ Future<void> checkUpdateUi([bool showMessageIfNoUpdate = true, bool delay = fals
                   onPressed: () {
                     Navigator.pop(context);
                     OhosUrlLauncher.launchUrlString(
-                        "https://github.com/venera-app/venera/releases");
+                        "https://github.com/Twopuding/venera-harmony/releases/latest");
                   },
                   child: Text("Update".tl),
                 ),

@@ -1,10 +1,10 @@
 name: venera
 description: "Venera Comic Reader for HarmonyOS"
 publish_to: 'none'
-version: 0.1.0+1000001
+version: 1.6.5+1060500
 
 environment:
-  sdk: '>=3.4.4 <4.0.0'
+  sdk: '>=3.6.0 <4.0.0'
 
 dependencies:
   flutter:
@@ -13,13 +13,13 @@ dependencies:
     sdk: flutter
   intl: any
   crypto: ^3.0.6
-  dio: ^5.4.0
+  dio: ^5.9.2
   html: ^0.15.6
   pointycastle: ^4.0.0
   path: ^1.9.0
   mime: ^2.0.0
   uuid: ^4.5.1
-  sqlite3: ^2.4.7
+  sqlite3: ^2.7.4
   ffi: ^2.0.0
   archive: ^3.4.0
   image: ^4.1.0
@@ -50,11 +50,17 @@ dependencies:
     git:
       url: https://github.com/venera-app/webdav_client
       ref: 2f669c98fb81cff1c64fee93466a1475c77e4273
+  display_mode:
+    path: stubs/display_mode
+  flutter_saf:
+    path: stubs/flutter_saf
+  flutter_inappwebview:
+    path: ../../plugins/flutter_inappwebview_repo/flutter_inappwebview
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.0
+  flutter_lints: ^4.0.0
 
 flutter:
   uses-material-design: true

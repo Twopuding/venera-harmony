@@ -19,6 +19,44 @@ class ImageFavoritesProvider
 
   final ImageFavorite imageFavorite;
 
+  /// Persistent storage for favorite images (not under cacheDir).
+  static String get storageDir =>
+      FilePath.join(App.dataPath, 'image_favorites');
+
+  static String get _legacyCacheDir =>
+      FilePath.join(App.cachePath, 'image_favorites');
+
+  /// Move legacy files from cacheDir to dataPath once.
+  static Future<void> migrateFromCacheIfNeeded() async {
+    try {
+      var oldDir = Directory(_legacyCacheDir);
+      if (!await oldDir.exists()) {
+        return;
+      }
+      var newDir = Directory(storageDir);
+      if (!await newDir.exists()) {
+        await newDir.create(recursive: true);
+      }
+      await for (var entity in oldDir.list(recursive: false)) {
+        if (entity is! File) continue;
+        var dest = File(FilePath.join(storageDir, entity.name));
+        if (await dest.exists()) {
+          await entity.delete();
+          continue;
+        }
+        try {
+          await entity.rename(dest.path);
+        } catch (_) {
+          await entity.copy(dest.path);
+          await entity.delete();
+        }
+      }
+      await oldDir.deleteIgnoreError(recursive: true);
+    } catch (e, s) {
+      debugPrint('migrate image_favorites failed: $e\n$s');
+    }
+  }
+
   int get page => imageFavorite.page;
 
   String get sourceKey => imageFavorite.sourceKey;
@@ -66,7 +104,7 @@ class ImageFavoritesProvider
 
   Future<void> writeToCache(Uint8List image) async {
     var fileName = md5.convert(key.codeUnits).toString();
-    var file = File(FilePath.join(App.cachePath, 'image_favorites', fileName));
+    var file = File(FilePath.join(storageDir, fileName));
     if (!file.existsSync()) {
       file.createSync(recursive: true);
     }
@@ -75,7 +113,7 @@ class ImageFavoritesProvider
 
   Future<Uint8List?> readFromCache() async {
     var fileName = md5.convert(key.codeUnits).toString();
-    var file = File(FilePath.join(App.cachePath, 'image_favorites', fileName));
+    var file = File(FilePath.join(storageDir, fileName));
     if (!file.existsSync()) {
       return null;
     }
@@ -85,7 +123,7 @@ class ImageFavoritesProvider
   /// Delete a image favorite cache
   static Future<void> deleteFromCache(ImageFavorite imageFavorite) async {
     var fileName = md5.convert(imageFavorite.imageKey.codeUnits).toString();
-    var file = File(FilePath.join(App.cachePath, 'image_favorites', fileName));
+    var file = File(FilePath.join(storageDir, fileName));
     if (file.existsSync()) {
       await file.delete();
     }

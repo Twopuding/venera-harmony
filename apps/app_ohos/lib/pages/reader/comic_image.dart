@@ -80,7 +80,13 @@ class ComicImage extends StatefulWidget {
 
   static Size? getCachedSize(String imageKey) => _cache[imageKey];
 
-  static void cacheSize(String imageKey, Size size) => _cache[imageKey] = size;
+  static void cacheSize(String imageKey, Size size, {VoidCallback? onChanged}) {
+    Size? old = _cache[imageKey];
+    _cache[imageKey] = size;
+    if (onChanged != null && old != null && (old.width != size.width || old.height != size.height)) {
+      onChanged();
+    }
+  }
 
   @override
   State<ComicImage> createState() => _ComicImageState();

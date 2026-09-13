@@ -244,9 +244,13 @@ export class WebViewBridge implements MethodCallHandler {
     this.bridge.invokeMethod(CHANNEL_NAME, 'onCloudflareDetected', url);
   }
 
-  onCloudflareResolved(url: string, cookies: string): void {
-    let parsed: Array<CookieEntry> = this.parseCookieHeader(cookies, url);
-    this.bridge.invokeMethod(CHANNEL_NAME, 'onCloudflareResolved', parsed);
+  onCloudflareResolved(url: string, cookies: string, userAgent: string): void {
+    let params: WebViewCloudflareResolvedParams = {
+      url: url,
+      cookies: cookies,
+      userAgent: userAgent
+    };
+    this.bridge.invokeMethod(CHANNEL_NAME, 'onCloudflareResolved', params);
   }
 }
 
@@ -262,4 +266,10 @@ interface CookieEntry {
   name: string;
   value: string;
   domain: string;
+}
+
+interface WebViewCloudflareResolvedParams {
+  url: string;
+  cookies: string;
+  userAgent: string;
 }

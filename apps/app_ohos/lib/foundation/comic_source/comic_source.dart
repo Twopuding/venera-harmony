@@ -230,6 +230,18 @@ class ComicSource {
     DataSync().uploadData();
   }
 
+  static Future<void> clearCopyMangaDeviceInfo() async {
+    var source = ComicSource.find('copy_manga');
+    if (source == null) return;
+    source.data.remove('_deviceinfo');
+    source.data.remove('_device');
+    source.data.remove('_pseudoid');
+    await source.saveData();
+    try {
+      JsEngine().runCode("ComicSource.sources.copy_manga.refreshAppApi()");
+    } catch (_) {}
+  }
+
   Future<bool> reLogin() async {
     if (data["account"] == null) {
       return false;

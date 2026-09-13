@@ -213,7 +213,7 @@ struct WebViewPage {
     this.onClose();
   }
 
-  private checkCloudflare(url: string): void {
+  private async checkCloudflare(url: string): Promise<void> {
     try {
       let cookies: string = webview.WebCookieManager.fetchCookieSync(url);
       let hasCfChallenge: boolean = cookies.indexOf(CF_CHALLENGE) !== -1;
@@ -222,7 +222,8 @@ struct WebViewPage {
         this.bridge.onCloudflareDetected(url);
         hilog.info(DOMAIN, TAG, 'Cloudflare challenge detected for: ' + url);
       } else if (hasCfClearance) {
-        this.bridge.onCloudflareResolved(url, cookies);
+        let ua: string = await this.getUserAgent();
+        this.bridge.onCloudflareResolved(url, cookies, ua);
         hilog.info(DOMAIN, TAG, 'Cloudflare resolved for: ' + url);
       }
     } catch (e) {
@@ -230,7 +231,7 @@ struct WebViewPage {
     }
   }
 
-  private extractCookies(url: string): void {
+  private async extractCookies(url: string): Promise<void> {
     try {
       let cookies: string = webview.WebCookieManager.fetchCookieSync(url);
       if (cookies.length > 0) {
@@ -238,11 +239,27 @@ struct WebViewPage {
         hilog.info(DOMAIN, TAG, 'Cookies extracted for: ' + url);
         let hasCfClearance: boolean = cookies.indexOf(CF_CLEARANCE) !== -1;
         if (hasCfClearance) {
-          this.bridge.onCloudflareResolved(url, cookies);
+          let ua: string = await this.getUserAgent();
+          this.bridge.onCloudflareResolved(url, cookies, ua);
         }
       }
     } catch (e) {
       hilog.error(DOMAIN, TAG, 'Cookie extraction failed');
+    }
+  }
+
+  private async getUserAgent(): Promise<string> {
+    let jsCode: string = 'navigator.userAgent';
+    try {
+      let result: string = await this.controller.runJavaScript(jsCode) as string;
+      // ArkWeb may wrap the result in quotes.
+      if (result.length >= 2 && result.charAt(0) === '"' && result.charAt(result.length - 1) === '"') {
+        result = result.substring(1, result.length - 1);
+      }
+      return result;
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'Failed to get UserAgent');
+      return '';
     }
   }
 }

@@ -1247,7 +1247,9 @@ class LocalFavoritesManager with ChangeNotifier {
 
   void markAsRead(String id, ComicType type) {
     var folder = appdata.settings['followUpdatesFolder'];
-    if (!existsFolder(folder)) {
+    // followUpdatesFolder is null when the follow-updates folder is not
+    // configured; guard so the reader does not crash on open.
+    if (folder is! String || folder.isEmpty || !existsFolder(folder)) {
       return;
     }
     _db.execute("""

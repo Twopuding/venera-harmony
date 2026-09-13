@@ -273,6 +273,7 @@ class CacheManager {
     }
   }
 
+
   /// Delete all cache.
   Future<void> clear() async {
     await Directory(cachePath).delete(recursive: true);

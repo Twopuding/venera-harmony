@@ -1,11 +1,12 @@
-﻿import 'package:flutter/material.dart';
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:venera/components/components.dart';
-import 'package:venera/foundation/app.dart';
-import 'package:venera/foundation/appdata.dart';
-import 'package:venera/network/proxy.dart';
+import 'package:venera/foundation/log.dart';
 import 'package:venera/platform/ohos_platform_services.dart';
-import 'package:venera/utils/ext.dart';
 import 'package:venera/utils/translations.dart';
 
 typedef WebviewOnTitleChange = void Function(String title);
@@ -47,7 +48,7 @@ class AppWebview extends StatefulWidget {
 }
 
 class AppWebviewState extends State<AppWebview> {
-  static const MethodChannel _channel = MethodChannel('com.venera.webview');
+  InAppWebViewController? _controller;
 
   String _title = '';
   String _currentUrl = '';
@@ -62,46 +63,17 @@ class AppWebviewState extends State<AppWebview> {
     super.initState();
     _currentUrl = widget.initialUrl ?? '';
     AppWebview._activeStates.add(this);
-    _setupMethodCallHandler();
-    if (widget.initialUrl != null && widget.initialUrl!.isNotEmpty) {
-      _loadUrlInternal(widget.initialUrl!);
+  }
+
+  Future<String> getCurrentUrl() async {
+    final url = await _controller?.getUrl();
+    if (url != null) {
+      _currentUrl = url.toString();
     }
+    return _currentUrl;
   }
 
-  void _setupMethodCallHandler() {
-    _channel.setMethodCallHandler((call) async {
-      switch (call.method) {
-        case 'onTitleChanged':
-          var t = call.arguments as String?;
-          if (t != null && mounted) {
-            _title = t;
-            widget.onTitleChange?.call(t);
-          }
-          return null;
-        case 'onUrlChanged':
-          var u = call.arguments as String?;
-          if (u != null && mounted) {
-            var shouldCancel = widget.onNavigation?.call(u) ?? false;
-            if (!shouldCancel) {
-              _currentUrl = u;
-            }
-          }
-          return null;
-        case 'onLoadStop':
-          if (mounted) {
-            setState(() {
-              _isLoading = false;
-            });
-            widget.onLoadStop?.call();
-          }
-          return null;
-        default:
-          return null;
-      }
-    });
-  }
-
-  void _loadUrlInternal(String url) async {
+  Future<void> loadUrl(String url) async {
     if (mounted) {
       setState(() {
         _isLoading = true;
@@ -109,33 +81,12 @@ class AppWebviewState extends State<AppWebview> {
       });
     }
     try {
-      await _channel.invokeMethod<void>('loadUrl', {'url': url});
-      if (widget.onStarted != null) {
-        widget.onStarted!();
-      }
-    } on MissingPluginException {
-      if (widget.onStarted != null) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          widget.onStarted!();
-        });
-      }
+      await (_controller?.loadUrl(urlRequest: URLRequest(url: WebUri(url))) ??
+              Future<void>.value())
+          .timeout(const Duration(seconds: 8));
+    } on TimeoutException {
+      Log.warning('Webview', 'loadUrl timed out: $url');
     }
-  }
-
-  Future<String> getCurrentUrl() async {
-    try {
-      var url = await _channel.invokeMethod<String>('getCurrentUrl');
-      if (url != null) {
-        _currentUrl = url;
-      }
-      return url ?? _currentUrl;
-    } on MissingPluginException {
-      return _currentUrl;
-    }
-  }
-
-  Future<void> loadUrl(String url) async {
-    _loadUrlInternal(url);
   }
 
   Future<void> loadData(String data, {String mimeType = 'text/html'}) async {
@@ -144,35 +95,255 @@ class AppWebviewState extends State<AppWebview> {
         _isLoading = true;
       });
     }
+    await _controller?.loadData(data: data, mimeType: mimeType);
   }
 
   Future<dynamic> evaluateJavascript(String source) async {
+    // Guard against ArkWeb hanging while a page is still loading: never let
+    // a JS evaluation block the caller indefinitely.
     try {
-      return await _channel.invokeMethod<dynamic>('evalJs', {'jsCode': source});
-    } on MissingPluginException {
+      return await (_controller?.evaluateJavascript(source: source) ??
+              Future<dynamic>.value(null))
+          .timeout(const Duration(seconds: 5));
+    } on TimeoutException {
       return null;
     }
   }
 
-  Future<void> clearCache() async {}
+  Future<void> clearCache() async {
+    await InAppWebViewController.clearAllCache();
+  }
 
   Future<Map<String, String>> getCookies(String url) async {
+    // Prefer ArkWeb WebCookieManager — includes HttpOnly (cf_clearance).
+    // flutter_inappwebview_ohos does not implement CookieManager.
+    // Merge full URL + origin/ so domain cookies are not missed.
+    final ohos = await OhosWebCookies.fetchMerged(url);
+    if (ohos.isNotEmpty) {
+      return ohos;
+    }
     try {
-      var result =
-          await _channel.invokeMethod<List<dynamic>>('getCookies', {'url': url});
-      if (result == null) return {};
-      var cookies = <String, String>{};
-      for (var item in result) {
-        if (item is Map<dynamic, dynamic>) {
-          var map = item.map((k, v) => MapEntry(k.toString(), v.toString()));
-          cookies[map['name'] ?? ''] = map['value'] ?? '';
+      final list = await CookieManager.instance()
+          .getCookies(
+            url: WebUri(url),
+            webViewController: _controller,
+          )
+          .timeout(const Duration(seconds: 1));
+      final cookies = <String, String>{};
+      for (final c in list) {
+        if (c.name.isNotEmpty) {
+          cookies[c.name] = c.value?.toString() ?? '';
         }
       }
-      cookies.removeWhere((key, value) => key.isEmpty);
-      return cookies;
-    } on MissingPluginException {
+      if (cookies.isNotEmpty) return cookies;
+    } catch (_) {}
+    try {
+      final result = await evaluateJavascript('document.cookie');
+      if (result != null) {
+        var raw = result.toString();
+        if (raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"')) {
+          raw = raw.substring(1, raw.length - 1);
+        }
+        return OhosWebCookies.parseCookieHeader(raw);
+      }
+    } catch (_) {}
+    return {};
+  }
+
+  Future<Map<String, String>> getLocalStorage() async {
+    try {
+      final result = await evaluateJavascript('''
+        (function() {
+          var items = {};
+          for (var i = 0; i < localStorage.length; i++) {
+            var key = localStorage.key(i);
+            if (key !== null) {
+              items[key] = localStorage.getItem(key);
+            }
+          }
+          return items;
+        })()
+      ''');
+      if (result is Map) {
+        return result.map((k, v) => MapEntry(k.toString(), v.toString()));
+      }
+      return {};
+    } catch (_) {
       return {};
     }
+  }
+
+  Future<String?> getUserAgent() async {
+    try {
+      final result =
+          await evaluateJavascript('navigator.userAgent');
+      if (result == null) return null;
+      var ua = result.toString();
+      if (ua.length >= 2 && ua.startsWith('"') && ua.endsWith('"')) {
+        ua = ua.substring(1, ua.length - 1);
+      }
+      return ua;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Start a same-origin `fetch()` in the page for [url] and store the result
+  /// (a JSON string with status/headers/bodyBase64) on
+  /// `window.__veneraFetchResult`. Poll [pollFetchResult] until it appears.
+  ///
+  /// Used by the Cloudflare fallback: the page is parked on the target origin
+  /// so the fetch is same-origin (no CORS), and the ArkWeb engine performs the
+  /// request with its browser-grade TLS/HTTP stack.
+  Future<void> runFetchScript({
+    required String url,
+    String method = 'GET',
+    Map<String, dynamic>? headers,
+    Object? data,
+  }) async {
+    // Headers a browser forbids setting on fetch(); the engine fills them.
+    const forbidden = {
+      'host',
+      'content-length',
+      'connection',
+      'transfer-encoding',
+      'accept-encoding',
+      'cookie',
+      'set-cookie',
+      'user-agent',
+    };
+    final safeHeaders = <String, String>{};
+    (headers ?? {}).forEach((key, value) {
+      if (value == null) return;
+      if (forbidden.contains(key.toLowerCase())) return;
+      safeHeaders[key] = value.toString();
+    });
+
+    String bodyExpr = 'null';
+    if (data is String && data.isNotEmpty) {
+      bodyExpr = jsonEncode(data);
+    } else if (data is Map && data.isNotEmpty) {
+      final form = data.map(
+        (k, v) => MapEntry(k.toString(), v.toString()),
+      );
+      bodyExpr = 'new URLSearchParams(${jsonEncode(form)})';
+    }
+
+    final script = '''
+(function() {
+  window.__veneraFetchResult = null;
+  var url = ${jsonEncode(url)};
+  var opts = {
+    method: ${jsonEncode(method.toUpperCase())},
+    headers: ${jsonEncode(safeHeaders)},
+    credentials: 'include',
+    redirect: 'follow'
+  };
+  var body = $bodyExpr;
+  if (body !== null) { opts.body = body; }
+  fetch(url, opts).then(function(r) {
+    return r.arrayBuffer().then(function(buf) {
+      var bytes = new Uint8Array(buf);
+      var CHUNK = 0x8000;
+      var bin = '';
+      for (var i = 0; i < bytes.length; i += CHUNK) {
+        var sub = bytes.subarray(i, Math.min(i + CHUNK, bytes.length));
+        bin += String.fromCharCode.apply(null, sub);
+      }
+      var hdrs = {};
+      r.headers.forEach(function(v, k) { hdrs[k] = v; });
+      window.__veneraFetchResult = JSON.stringify({
+        status: r.status,
+        ok: r.ok,
+        headers: hdrs,
+        bodyBase64: btoa(bin)
+      });
+    });
+  }).catch(function(e) {
+    window.__veneraFetchResult = JSON.stringify({
+      error: String((e && e.message) ? e.message : e)
+    });
+  });
+})();
+''';
+    try {
+      await evaluateJavascript(script);
+    } catch (err) {
+      Log.warning('Webview', 'runFetchScript error: $err');
+    }
+  }
+
+  /// Poll the result set by [runFetchScript]. Returns the decoded map once the
+  /// fetch settled, or null while it is still pending / on failure.
+  Future<Map<String, dynamic>?> pollFetchResult() async {
+    try {
+      final res = await evaluateJavascript('window.__veneraFetchResult');
+      if (res == null) return null;
+      if (res is Map) {
+        final map = Map<String, dynamic>.from(res);
+        return map.isEmpty ? null : map;
+      }
+      final s = res.toString();
+      if (s.isEmpty || s == 'null' || s == 'undefined') return null;
+      final decoded = jsonDecode(s);
+      if (decoded is Map) {
+        final map = Map<String, dynamic>.from(decoded);
+        return map.isEmpty ? null : map;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Reset the fetch result slot.
+  Future<void> clearFetchResult() async {
+    try {
+      await evaluateJavascript('window.__veneraFetchResult = null;');
+    } catch (_) {}
+  }
+
+  /// Read the current page title (used to detect placeholder/nginx pages).
+  Future<String?> getPageTitle() async {
+    try {
+      final res = await evaluateJavascript('document.title');
+      return _cleanJsString(res);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Read the current page body as plain text (JSON API responses render as
+  /// body text when the page navigates to them).
+  Future<String?> getPageText() async {
+    try {
+      final res =
+          await evaluateJavascript('document.body ? document.body.innerText : ""');
+      return _cleanJsString(res);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Read the whole current page HTML.
+  Future<String?> getPageHtml() async {
+    try {
+      final res = await evaluateJavascript(
+          'document.documentElement ? document.documentElement.outerHTML : ""');
+      return _cleanJsString(res);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static String? _cleanJsString(dynamic res) {
+    if (res == null) return null;
+    var s = res.toString();
+    if (s.length >= 2 && s.startsWith('"') && s.endsWith('"')) {
+      s = s.substring(1, s.length - 1);
+    }
+    if (s.isEmpty || s == 'null' || s == 'undefined') return null;
+    return s;
   }
 
   @override
@@ -183,36 +354,90 @@ class AppWebviewState extends State<AppWebview> {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      child: Stack(
+    final webView = InAppWebView(
+      initialUrlRequest: (widget.initialUrl != null &&
+              widget.initialUrl!.isNotEmpty)
+          ? URLRequest(url: WebUri(widget.initialUrl!))
+          : null,
+      initialData: widget.initialData != null
+          ? InAppWebViewInitialData(data: widget.initialData!)
+          : null,
+      initialSettings: InAppWebViewSettings(
+        javaScriptEnabled: true,
+        domStorageEnabled: true,
+        userAgent: widget.userAgent,
+        useShouldOverrideUrlLoading: widget.onNavigation != null,
+        mediaPlaybackRequiresUserGesture: false,
+        allowsInlineMediaPlayback: true,
+        thirdPartyCookiesEnabled: true,
+        javaScriptCanOpenWindowsAutomatically: true,
+      ),
+      onWebViewCreated: (controller) {
+        _controller = controller;
+        widget.onStarted?.call();
+      },
+      onLoadStart: (controller, url) {
+        if (!mounted) return;
+        setState(() {
+          _isLoading = true;
+          if (url != null) {
+            _currentUrl = url.toString();
+          }
+        });
+      },
+      onLoadStop: (controller, url) {
+        if (!mounted) return;
+        setState(() {
+          _isLoading = false;
+          if (url != null) {
+            _currentUrl = url.toString();
+          }
+        });
+        widget.onLoadStop?.call();
+      },
+      onTitleChanged: (controller, title) {
+        if (title == null) return;
+        if (mounted) {
+          setState(() {
+            _title = title;
+          });
+        } else {
+          _title = title;
+        }
+        widget.onTitleChange?.call(title);
+      },
+      shouldOverrideUrlLoading: widget.onNavigation == null
+          ? null
+          : (controller, navigationAction) async {
+              final url = navigationAction.request.url?.toString() ?? '';
+              final cancel = widget.onNavigation!(url);
+              return cancel
+                  ? NavigationActionPolicy.CANCEL
+                  : NavigationActionPolicy.ALLOW;
+            },
+    );
+
+    return Scaffold(
+      appBar: Appbar(
+        title: Text(_title.isEmpty ? 'WebView'.tl : _title),
+      ),
+      body: Stack(
         children: [
-          Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.language, size: 48, color: Colors.grey),
-                const SizedBox(height: 16),
-                Text(
-                  _currentUrl,
-                  style: const TextStyle(color: Colors.grey, fontSize: 12),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'WebView is handled by native page'.tl,
-                  style: const TextStyle(color: Colors.grey, fontSize: 14),
-                ),
-              ],
-            ),
-          ),
+          Positioned.fill(child: webView),
           if (_isLoading)
-            const LinearProgressIndicator(),
+            const Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: LinearProgressIndicator(),
+            ),
         ],
       ),
     );
   }
 }
 
+/// Legacy Ability-based WebView for login flows that still use the native channel.
 class DesktopWebview {
   static Future<bool> isAvailable() async => true;
 
@@ -231,7 +456,7 @@ class DesktopWebview {
     this.onClose,
   });
 
-  static const MethodChannel _channel = MethodChannel('com.venera.webview');
+  static const _channelName = 'com.venera.webview';
 
   String? _title;
   String? _ua;
@@ -240,9 +465,9 @@ class DesktopWebview {
   String? get title => _title;
 
   void open() async {
-    _setupMethodCallHandler();
     try {
-      await _channel.invokeMethod<void>('open', {'url': initialUrl});
+      await const MethodChannel(_channelName)
+          .invokeMethod<void>('open', {'url': initialUrl});
     } on MissingPluginException {
       //
     }
@@ -251,36 +476,10 @@ class DesktopWebview {
     });
   }
 
-  void _setupMethodCallHandler() {
-    _channel.setMethodCallHandler((call) async {
-      switch (call.method) {
-        case 'onTitleChanged':
-          var t = call.arguments as String?;
-          if (t != null) {
-            _title = t;
-            onTitleChange?.call(t);
-          }
-          return null;
-        case 'onUrlChanged':
-          var u = call.arguments as String?;
-          if (u != null) {
-            onNavigation?.call(u);
-          }
-          return null;
-        case 'onLoadStop':
-          return null;
-        case 'onClosed':
-          onClose?.call();
-          return null;
-        default:
-          return null;
-      }
-    });
-  }
-
   Future<String?> evaluateJavascript(String source) async {
     try {
-      return await _channel.invokeMethod<String>('evalJs', {'jsCode': source});
+      return await const MethodChannel(_channelName)
+          .invokeMethod<String>('evalJs', {'jsCode': source});
     } on MissingPluginException {
       return null;
     }
@@ -288,8 +487,8 @@ class DesktopWebview {
 
   Future<Map<String, String>> getCookies(String url) async {
     try {
-      var result =
-          await _channel.invokeMethod<List<dynamic>>('getCookies', {'url': url});
+      var result = await const MethodChannel(_channelName)
+          .invokeMethod<List<dynamic>>('getCookies', {'url': url});
       if (result == null) return {};
       var cookies = <String, String>{};
       for (var item in result) {
@@ -305,9 +504,37 @@ class DesktopWebview {
     }
   }
 
+  Future<Map<String, String>> getLocalStorage() async {
+    try {
+      var result = await const MethodChannel(_channelName)
+          .invokeMethod<Map<dynamic, dynamic>>('getLocalStorage');
+      if (result == null) return {};
+      var localStorage = <String, String>{};
+      result.forEach((key, value) {
+        localStorage[key.toString()] = value.toString();
+      });
+      return localStorage;
+    } on MissingPluginException {
+      return {};
+    }
+  }
+
+  Future<String?> getUserAgent() async {
+    try {
+      var ua = await const MethodChannel(_channelName)
+          .invokeMethod<String>('getUserAgent');
+      if (ua != null) {
+        _ua = ua;
+      }
+      return ua;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
   void close() async {
     try {
-      await _channel.invokeMethod<void>('close');
+      await const MethodChannel(_channelName).invokeMethod<void>('close');
     } on MissingPluginException {
       //
     }

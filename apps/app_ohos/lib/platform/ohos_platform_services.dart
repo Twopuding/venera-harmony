@@ -1,4 +1,6 @@
-﻿import 'package:flutter/services.dart';
+﻿import 'dart:async';
+
+import 'package:flutter/services.dart';
 
 class OhosUrlLauncher {
   static const _channel = MethodChannel('venera/method_channel');
@@ -60,29 +62,21 @@ class OhosFileDialog {
   static Future<String?> pickFile({
     List<String>? extensions,
   }) async {
-    try {
-      var result = await _channel.invokeMethod<String>('pickFile', {
-        'extensions': extensions,
-      });
-      return result;
-    } on PlatformException {
-      return null;
-    }
+    var result = await _channel.invokeMethod<String>('pickFile', {
+      'extensions': extensions,
+    });
+    return result;
   }
 
   static Future<String?> saveFile({
     required String sourceFilePath,
     String? suggestedName,
   }) async {
-    try {
-      var result = await _channel.invokeMethod<String>('saveFile', {
-        'sourceFilePath': sourceFilePath,
-        'suggestedName': suggestedName,
-      });
-      return result;
-    } on PlatformException {
-      return null;
-    }
+    var result = await _channel.invokeMethod<String>('saveFile', {
+      'sourceFilePath': sourceFilePath,
+      'suggestedName': suggestedName,
+    });
+    return result;
   }
 }
 
@@ -211,5 +205,109 @@ class OhosProxy {
     } on PlatformException {
       return null;
     }
+  }
+
+  static Future<bool> setProxy({
+    required String host,
+    required int port,
+    List<String> exclusionList = const [],
+  }) async {
+    try {
+      var result = await _channel.invokeMethod<bool>('setProxy', {
+        'host': host,
+        'port': port,
+        'exclusionList': exclusionList,
+      });
+      return result ?? false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
+  static Future<bool> clearProxy() async {
+    try {
+      var result = await _channel.invokeMethod<bool>('clearProxy');
+      return result ?? false;
+    } on PlatformException {
+      return false;
+    }
+  }
+}
+
+class OhosStorage {
+  static const _channel = MethodChannel('venera/method_channel');
+
+  static Future<int> getCacheSize() async {
+    try {
+      var result = await _channel.invokeMethod<int>('getCacheSize');
+      return result ?? 0;
+    } on PlatformException {
+      return 0;
+    }
+  }
+
+  static Future<bool> clearAppCache() async {
+    try {
+      var result = await _channel.invokeMethod<bool>('clearAppCache');
+      return result ?? false;
+    } on PlatformException {
+      return false;
+    }
+  }
+}
+
+/// Reads WebView cookies via ArkWeb WebCookieManager (includes HttpOnly).
+class OhosWebCookies {
+  static const _channel = MethodChannel('venera/method_channel');
+
+  /// Parse `"a=1; b=2"` into a name/value map.
+  static Map<String, String> parseCookieHeader(String raw) {
+    final cookies = <String, String>{};
+    for (final part in raw.split(';')) {
+      final trimmed = part.trim();
+      if (trimmed.isEmpty) continue;
+      final eq = trimmed.indexOf('=');
+      if (eq <= 0) continue;
+      final name = trimmed.substring(0, eq).trim();
+      final value = trimmed.substring(eq + 1).trim();
+      if (name.isNotEmpty) {
+        cookies[name] = value;
+      }
+    }
+    return cookies;
+  }
+
+  static Future<Map<String, String>> fetch(String url) async {
+    try {
+      final raw = await _channel
+          .invokeMethod<String>('getWebCookies', {'url': url})
+          .timeout(const Duration(seconds: 3));
+      if (raw == null || raw.isEmpty) return {};
+      return parseCookieHeader(raw);
+    } on MissingPluginException {
+      return {};
+    } on PlatformException {
+      return {};
+    } on TimeoutException {
+      return {};
+    }
+  }
+
+  /// Fetch cookies for the full URL and `origin/`, then merge (full URL wins).
+  static Future<Map<String, String>> fetchMerged(String url) async {
+    final uri = Uri.tryParse(url);
+    final originUrl =
+        (uri != null && uri.hasScheme && uri.host.isNotEmpty)
+            ? '${uri.origin}/'
+            : null;
+
+    final primary = await fetch(url);
+    if (originUrl == null || originUrl == url || originUrl == '$url/') {
+      return primary;
+    }
+    final origin = await fetch(originUrl);
+    if (origin.isEmpty) return primary;
+    if (primary.isEmpty) return origin;
+    return {...origin, ...primary};
   }
 }

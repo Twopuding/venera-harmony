@@ -4,8 +4,7 @@ version: 0.3.7-ohos.1
 homepage: https://github.com/venera-app/flutter_qjs
 
 environment:
-  sdk: ">=3.4.0 <4.0.0"
-  flutter: ">=3.22.0"
+  sdk: ">=3.6.0 <4.0.0"
 
 dependencies:
   flutter:

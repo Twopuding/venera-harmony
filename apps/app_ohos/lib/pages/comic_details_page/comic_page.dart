@@ -245,6 +245,9 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
     if (comicSource == null) {
       return const Res.error('Comic source not found');
     }
+    if (widget.sourceKey == 'copy_manga') {
+      await ComicSource.clearCopyMangaDeviceInfo();
+    }
     isAddToLocalFav = LocalFavoritesManager().isExist(
       widget.id,
       ComicType(widget.sourceKey.hashCode),
@@ -983,50 +986,62 @@ class _ComicPageLoadingPlaceHolder extends StatelessWidget {
       );
     }
 
-    return Shimmer(
-      color: context.isDarkMode ? Colors.grey.shade700 : Colors.white,
-      child: Column(
-        children: [
-          Appbar(title: Text(""), backgroundColor: context.colorScheme.surface),
-          const SizedBox(height: 8),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return Scaffold(
+      backgroundColor: context.colorScheme.surface,
+      body: Container(
+        color: context.colorScheme.surface,
+        child: Shimmer(
+          color: context.isDarkMode ? Colors.grey.shade700 : Colors.white,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(width: 16),
-              buildImage(context),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              Appbar(
+                title: Text(""),
+                backgroundColor: context.colorScheme.surface,
+                style: AppbarStyle.shadow,
+              ),
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(width: 16),
+                  buildImage(context),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (title != null)
+                          Text(title ?? "", style: ts.s18)
+                        else
+                          buildContainer(200, 25),
+                        const SizedBox(height: 8),
+                        buildContainer(80, 20),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (context.width < changePoint)
+                Row(
                   children: [
-                    if (title != null)
-                      Text(title ?? "", style: ts.s18)
-                    else
-                      buildContainer(200, 25),
-                    const SizedBox(height: 8),
-                    buildContainer(80, 20),
+                    Expanded(child: buildContainer(null, 36, radius: 18)),
+                    const SizedBox(width: 16),
+                    Expanded(child: buildContainer(null, 36, radius: 18)),
                   ],
+                ).paddingHorizontal(16),
+              const Divider(),
+              Expanded(
+                child: Center(
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.4,
+                  ).fixHeight(24).fixWidth(24),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          if (context.width < changePoint)
-            Row(
-              children: [
-                Expanded(child: buildContainer(null, 36, radius: 18)),
-                const SizedBox(width: 16),
-                Expanded(child: buildContainer(null, 36, radius: 18)),
-              ],
-            ).paddingHorizontal(16),
-          const Divider(),
-          const SizedBox(height: 8),
-          Center(
-            child: CircularProgressIndicator(
-              strokeWidth: 2.4,
-            ).fixHeight(24).fixWidth(24),
-          ),
-        ],
+        ),
       ),
     );
   }

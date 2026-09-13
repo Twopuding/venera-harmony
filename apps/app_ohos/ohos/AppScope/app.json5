@@ -2,9 +2,8 @@
   "app": {
     "bundleName": "com.venera.ohos",
     "vendor": "example",
-    "versionCode": 1000001,
-    "versionName": "0.1.0",
-    "buildVersion": "0.1.0",
+    "versionCode": 1060500,
+    "versionName": "1.6.5",
     "icon": "$media:app_icon",
     "label": "$string:app_name"
   }
