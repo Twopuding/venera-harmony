@@ -54,6 +54,8 @@ dependencies:
     path: stubs/display_mode
   flutter_saf:
     path: stubs/flutter_saf
+  flutter_inappwebview:
+    path: ../../plugins/flutter_inappwebview_repo/flutter_inappwebview
 
 dev_dependencies:
   flutter_test:

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
 import 'package:venera/foundation/appdata.dart';
+import 'package:venera/foundation/consts.dart';
 import 'package:venera/foundation/log.dart';
 import 'package:venera/network/proxy.dart';
 
@@ -19,7 +20,8 @@ class OhosHttpClientAdapter implements HttpClientAdapter {
   ) async {
     if (options.headers['User-Agent'] == null &&
         options.headers['user-agent'] == null) {
-      options.headers['User-Agent'] = 'venera/ohos';
+      options.headers['User-Agent'] =
+          appdata.implicitData['ua'] as String? ?? webUA;
     }
 
     var uri = options.uri;

@@ -8,6 +8,7 @@ import { batteryInfo, BusinessError, deviceInfo } from '@kit.BasicServicesKit';
 import { window } from '@kit.ArkUI';
 import { userAuth } from '@kit.UserAuthenticationKit';
 import { connection } from '@kit.NetworkKit';
+import { webview } from '@kit.ArkWeb';
 
 const CHANNEL_NAME: string = 'venera/method_channel';
 const TAG: string = 'PlatformBridge';
@@ -87,6 +88,8 @@ export class PlatformBridge implements MethodCallHandler {
       this.handleGetCacheSize(result);
     } else if (call.method === 'clearAppCache') {
       this.handleClearAppCache(result);
+    } else if (call.method === 'getWebCookies') {
+      this.handleGetWebCookies(call, result);
     } else {
       result.notImplemented();
     }
@@ -952,6 +955,51 @@ export class PlatformBridge implements MethodCallHandler {
       result.success(false);
     });
   }
+
+  private handleGetWebCookies(call: BridgeMethodCall, result: MethodResult): void {
+    let url: string = '';
+    try {
+      if (call.args !== null) {
+        let jsonStr: string = JSON.stringify(call.args);
+        let parsed: GetWebCookiesParams = JSON.parse(jsonStr);
+        if (parsed.url !== undefined && parsed.url !== null) {
+          url = parsed.url;
+        }
+      }
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'getWebCookies: failed to parse args');
+    }
+    if (url.length === 0) {
+      result.error('ERROR', 'url is required', null);
+      return;
+    }
+    // Force cookie flush to disk before read — reduces miss on fresh Set-Cookie.
+    webview.WebCookieManager.saveCookieAsync().then(() => {
+      this.fetchWebCookiesForUrl(url, result);
+    }).catch((err: BusinessError) => {
+      hilog.warn(DOMAIN, TAG,
+        'getWebCookies saveCookieAsync failed, fetch anyway: ' + err.message);
+      this.fetchWebCookiesForUrl(url, result);
+    });
+  }
+
+  private fetchWebCookiesForUrl(url: string, result: MethodResult): void {
+    try {
+      let cookies: string = webview.WebCookieManager.fetchCookieSync(url);
+      let hasClearance: boolean = cookies.indexOf('cf_clearance=') >= 0;
+      hilog.warn(DOMAIN, TAG,
+        'getWebCookies for ' + url + ' len=' + cookies.length.toString() +
+        ' cf_clearance=' + hasClearance.toString());
+      result.success(cookies);
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'getWebCookies failed');
+      result.error('ERROR', 'fetchCookieSync failed', null);
+    }
+  }
+}
+
+interface GetWebCookiesParams {
+  url: string;
 }
 
 interface LaunchUrlParams {

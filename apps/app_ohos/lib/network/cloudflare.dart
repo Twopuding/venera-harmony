@@ -1,4 +1,4 @@
-﻿import 'dart:io' as io;
+import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:venera/foundation/app.dart';
@@ -6,9 +6,8 @@ import 'package:venera/foundation/appdata.dart';
 import 'package:venera/foundation/consts.dart';
 import 'package:venera/foundation/log.dart';
 import 'package:venera/pages/webview.dart';
-import 'package:venera/utils/ext.dart';
 
-import 'cookie_jar.dart';
+import 'webview_fetch.dart';
 
 class CloudflareException implements DioException {
   final String url;
@@ -59,11 +58,20 @@ class CloudflareException implements DioException {
   DioExceptionReadableStringBuilder? stringBuilder;
 }
 
+/// Returns true when [e] is (or wraps) a Cloudflare challenge rejection.
+bool isCloudflareError(Object e) {
+  if (e is CloudflareException) return true;
+  return CloudflareException.fromString(e.toString()) != null;
+}
+
 class CloudflareInterceptor extends Interceptor {
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
-    if (options.headers['cookie'].toString().contains('cf_clearance')) {
-      options.headers['user-agent'] = appdata.implicitData['ua'] ?? webUA;
+    final ua = appdata.implicitData['ua'];
+    if (ua is String && ua.isNotEmpty) {
+      options.headers['user-agent'] = ua;
+    } else if (options.headers['cookie'].toString().contains('cf_clearance')) {
+      options.headers['user-agent'] = webUA;
     }
     handler.next(options);
   }
@@ -90,7 +98,18 @@ class CloudflareInterceptor extends Interceptor {
   }
 
   CloudflareException? _check(Response response) {
-    if (response.headers['cf-mitigated']?.firstOrNull == "challenge") {
+    final mitigated = response.headers['cf-mitigated'];
+    if (mitigated != null &&
+        mitigated.isNotEmpty &&
+        mitigated.first == 'challenge') {
+      final ua = appdata.implicitData['ua'];
+      if (ua is String && ua.isNotEmpty) {
+        Log.warning(
+          'Cloudflare',
+          'WebView已通但 HttpClient TLS 仍被拦 (cf-mitigated): '
+          '${response.requestOptions.uri}',
+        );
+      }
       return CloudflareException(response.requestOptions.uri.toString());
     }
     return null;
@@ -98,80 +117,190 @@ class CloudflareInterceptor extends Interceptor {
 }
 
 void passCloudflare(CloudflareException e, void Function() onFinished) async {
-  var url = e.url;
-  var uri = Uri.parse(url);
+  final url = e.url;
+  final uri = Uri.parse(url);
+  // Open the exact failing URL first (the user confirmed it loads normally);
+  // fall back to the origin root if the exact URL is a placeholder.
+  final challengeUrl = url;
+  final fallbackUrl = '${uri.origin}/';
 
-  void saveCookies(Map<String, String> cookies) {
-    var domain = uri.host;
-    var splits = domain.split('.');
-    if (splits.length > 1) {
-      domain = ".${splits[splits.length - 2]}.${splits[splits.length - 1]}";
-    }
-    SingleInstanceCookieJar.instance!.saveFromResponse(
-      uri,
-      List<io.Cookie>.generate(cookies.length, (index) {
-        var cookie = io.Cookie(
-            cookies.keys.elementAt(index), cookies.values.elementAt(index));
-        cookie.domain = domain;
-        return cookie;
-      }),
+  var success = false;
+  var savedAny = false;
+  var loadedOnce = false;
+  var triedFallback = false;
+  var checking = false;
+  var stableNoClearance = 0;
+  Timer? pollTimer;
+
+  Future<void> finish(
+    AppWebviewState webviewState,
+    Map<String, String> cookies, {
+    required bool hasClearance,
+  }) async {
+    if (success) return;
+    success = true;
+    pollTimer?.cancel();
+    pollTimer = null;
+
+    saveWebviewCookies(challengeUrl, cookies);
+    savedAny = true;
+    Log.warning(
+      'Cloudflare',
+      'Saved ${cookies.length} cookies (cf_clearance=$hasClearance) '
+      'keys=${cookies.keys.join(",")}',
     );
+
+    final ua = await webviewState.getUserAgent();
+    if (ua != null && ua.isNotEmpty) {
+      saveWebviewUa(ua);
+      final preview = ua.length > 80 ? '${ua.substring(0, 80)}...' : ua;
+      Log.warning('Cloudflare', 'Saved WebView UA: $preview');
+    } else {
+      Log.warning('Cloudflare', 'No UA from WebView');
+    }
+
+    if (App.rootContext.mounted) {
+      App.rootContext.pop();
+    }
   }
 
-  bool success = false;
-
-  void check(AppWebviewState webviewState) async {
-    var currentUrl = await webviewState.getCurrentUrl();
-    if (currentUrl.contains('challenge') || currentUrl.contains('cf')) {
-      return;
-    }
-    var head = await webviewState.evaluateJavascript("document.head.innerHTML") ?? '';
-    var body = await webviewState.evaluateJavascript("document.body.innerHTML") ?? '';
-    var isChallenging = head.contains('#challenge-success-text') ||
-        head.contains("#challenge-error-text") ||
-        head.contains("#challenge-form") ||
-        body.contains("challenge-platform") ||
-        body.contains("window._cf_chl_opt");
-    if (isChallenging) {
-      return;
-    }
-    if (!success) {
-      success = true;
-      var cookies = await webviewState.getCookies(url);
-      if (cookies['cf_clearance'] == null) {
-        success = false;
+  Future<void> check(AppWebviewState webviewState) async {
+    if (success || checking) return;
+    checking = true;
+    try {
+      final head =
+          await webviewState.evaluateJavascript('document.head.innerHTML') ??
+              '';
+      final body =
+          await webviewState.evaluateJavascript('document.body.innerHTML') ??
+              '';
+      final headStr = head.toString();
+      final bodyStr = body.toString();
+      final isChallenging = headStr.contains('#challenge-success-text') ||
+          headStr.contains('#challenge-error-text') ||
+          headStr.contains('#challenge-form') ||
+          bodyStr.contains('challenge-platform') ||
+          bodyStr.contains('window._cf_chl_opt') ||
+          bodyStr.contains('cf-turnstile') ||
+          bodyStr.contains('Checking your browser');
+      if (isChallenging) {
+        stableNoClearance = 0;
         return;
       }
-      if (cookies.isNotEmpty) {
-        saveCookies(cookies);
+
+      final bodyTrim = bodyStr.trim();
+      if (bodyTrim.isEmpty || bodyTrim == 'null' || bodyTrim == 'undefined') {
+        return;
       }
-      onFinished();
+
+      // The device's network may serve a placeholder (e.g. raw nginx) for the
+      // exact URL; fall back to the origin root.
+      final title = await webviewState.getPageTitle();
+      if (isPlaceholderPage(title: title, body: bodyStr) && !triedFallback) {
+        triedFallback = true;
+        stableNoClearance = 0;
+        Log.warning(
+          'Cloudflare',
+          'Page is a placeholder (title=$title); navigating to $fallbackUrl',
+        );
+        try {
+          await webviewState.loadUrl(fallbackUrl);
+        } catch (err, stack) {
+          Log.warning('Cloudflare', 'navigate to fallback error: $err\n$stack');
+        }
+        return;
+      }
+      loadedOnce = true;
+
+      // Page is up; harvest cookies/UA immediately so a later retry (or the
+      // WebView fetch fallback in JsEngine._http) benefits from them.
+      final cookies = await webviewState.getCookies(challengeUrl);
+      if (cookies.isNotEmpty && !savedAny) {
+        saveWebviewCookies(challengeUrl, cookies);
+        savedAny = true;
+      }
+      final ua = await webviewState.getUserAgent();
+      if (ua != null && ua.isNotEmpty) {
+        saveWebviewUa(ua);
+      }
+
+      final hasClearance = cookies['cf_clearance'] != null;
+      Log.warning(
+        'Cloudflare',
+        'poll cookies=${cookies.length} cf_clearance=$hasClearance '
+        'stable=$stableNoClearance',
+      );
+
+      if (hasClearance) {
+        await finish(webviewState, cookies, hasClearance: true);
+        return;
+      }
+
+      // Keep waiting instead of closing after ~3s: a managed challenge may
+      // issue cf_clearance a few seconds after the page renders.
+      stableNoClearance++;
+      if (stableNoClearance >= 10) {
+        Log.warning(
+          'Cloudflare',
+          'No cf_clearance within budget; saving cookies/UA and closing',
+        );
+        await finish(webviewState, cookies, hasClearance: false);
+      }
+    } catch (err, stack) {
+      Log.warning('Cloudflare', 'check() error: $err\n$stack');
+    } finally {
+      checking = false;
     }
   }
 
-  await App.rootContext.to(
-    () => AppWebview(
-      initialUrl: url,
-      singlePage: true,
-      onTitleChange: (title) {
-        var state = AppWebview.activeState;
-        if (state != null) {
-          check(state);
-        }
-      },
-      onLoadStop: () {
-        var state = AppWebview.activeState;
-        if (state != null) {
-          check(state);
-        }
-      },
-      onStarted: () {
-        var state = AppWebview.activeState;
-        if (state != null) {
-          check(state);
-        }
-      },
-    ),
+  void scheduleCheck() {
+    final state = AppWebview.activeState;
+    if (state != null) {
+      check(state);
+    }
+  }
+
+  Log.warning(
+    'Cloudflare',
+    'Opening Flutter WebView for verification: $challengeUrl (system UA)',
   );
-  onFinished();
+
+  pollTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+    scheduleCheck();
+  });
+
+  try {
+    await App.rootContext.to(
+      () => AppWebview(
+        initialUrl: challengeUrl,
+        // Use ArkWeb system UA so CF treats this as a real browser; the UA is
+        // harvested and reused by the dart:io client afterwards.
+        singlePage: true,
+        onTitleChange: (_) => scheduleCheck(),
+        onLoadStop: scheduleCheck,
+        onStarted: scheduleCheck,
+      ),
+    );
+  } catch (err, stack) {
+    Log.error('Cloudflare', 'Failed to open WebView: $err', stack);
+    pollTimer?.cancel();
+    return;
+  } finally {
+    pollTimer?.cancel();
+    pollTimer = null;
+  }
+
+  if (success) {
+    onFinished();
+  } else if (savedAny || loadedOnce) {
+    // The page loaded (real site or data page) even without cf_clearance;
+    // retry — JsEngine._http will use the WebView fetch fallback for the data.
+    Log.warning(
+      'Cloudflare',
+      'Verification ended with saved cookies/loaded page; retrying',
+    );
+    onFinished();
+  } else {
+    Log.warning('Cloudflare', 'Verification cancelled or failed');
+  }
 }

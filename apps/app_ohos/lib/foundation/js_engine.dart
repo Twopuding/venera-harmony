@@ -26,8 +26,10 @@ import 'package:venera/components/js_ui.dart';
 import 'package:venera/foundation/app.dart';
 import 'package:venera/foundation/js_pool.dart';
 import 'package:venera/network/app_dio.dart';
+import 'package:venera/network/cloudflare.dart';
 import 'package:venera/network/cookie_jar.dart';
 import 'package:venera/network/proxy.dart';
+import 'package:venera/network/webview_fetch.dart';
 import 'package:venera/utils/init.dart';
 
 import 'comic_source/comic_source.dart';
@@ -250,6 +252,26 @@ class JsEngine with _JSEngineApi, JsUiApi, Init {
           )
       );
     } catch (e) {
+      if (isCloudflareError(e)) {
+        // The dart:io HttpClient is blocked by Cloudflare (TLS fingerprint),
+        // but the in-app WebView passes. Fall back to a same-origin fetch()
+        // through the WebView so the data still loads.
+        final wf = await WebviewFetch.fetch(
+          url: req["url"].toString(),
+          method: req['http_method']?.toString() ?? 'GET',
+          headers: Map<String, dynamic>.from(req["headers"] ?? {}),
+          data: req["data"],
+        );
+        if (wf != null) {
+          return {
+            "status": wf.status,
+            "headers": wf.headers,
+            "body": req["bytes"] == true ? wf.bodyBytes : wf.bodyText,
+            "error": null,
+          };
+        }
+        Log.warning('JsEngine', 'WebView fallback failed for ${req["url"]}');
+      }
       error = e.toString();
     }
 

@@ -14,13 +14,52 @@ if (-not $FlutterBat) {
     throw 'Flutter ohos SDK not found. Set FLUTTER_ROOT or install to D:\Project\flutter_ohos_sdk\flutter.'
 }
 
+# ---- Externalized signing support -----------------------------------------
+# flutter_tools refuses to build when the tracked build-profile.json5 has an
+# empty signingConfigs (the raw file is checked before hvigor's .local inject).
+# So for the duration of the build we merge the gitignored
+# build-profile.json5.local signing into the tracked file, then restore it.
+$BuildProfile = Join-Path $AppDir 'ohos\build-profile.json5'
+$LocalProfile = "$BuildProfile.local"
+$PreBuildProfile = "$BuildProfile.pre-build"
+
+function Merge-LocalSigning {
+    if (-not (Test-Path $LocalProfile)) {
+        Write-Host '[build] No build-profile.json5.local; assuming signing is inline'
+        return
+    }
+    $content = Get-Content -Raw $BuildProfile
+    $obj = $content | ConvertFrom-Json
+    $signing = @($obj.app.signingConfigs)
+    if ($signing.Count -gt 0) {
+        Write-Host '[build] build-profile.json5 already has signing configs'
+        return
+    }
+    $localObj = Get-Content -Raw $LocalProfile | ConvertFrom-Json
+    $localSigning = @($localObj.signingConfigs)
+    if ($localSigning.Count -eq 0) {
+        Write-Host '[build] .local has no signingConfigs; skipping inject'
+        return
+    }
+    Set-Content -Path $PreBuildProfile -Value $content -NoNewline
+    $obj.app.signingConfigs = $localSigning
+    ($obj | ConvertTo-Json -Depth 12) | Set-Content -Path $BuildProfile -Encoding UTF8
+    Write-Host '[build] Merged .local signing into build-profile.json5 for this build'
+}
+
+function Restore-TrackedProfile {
+    if (Test-Path $PreBuildProfile) {
+        Copy-Item -Path $PreBuildProfile -Destination $BuildProfile -Force
+        Remove-Item -Path $PreBuildProfile -Force
+        Write-Host '[build] Restored tracked build-profile.json5 (signing externalized)'
+    }
+}
+
 $FlutterExe = Join-Path $FlutterBat 'bin\flutter.bat'
 Push-Location $AppDir
+Merge-LocalSigning
 try {
-    & $FlutterExe build hap --release `
-        --tree-shake-icons `
-        --obfuscate `
-        --split-debug-info=build/symbols
+    & $FlutterExe build hap --release --tree-shake-icons --obfuscate --split-debug-info=build/symbols
 
     $HapPath = Join-Path $AppDir 'build\ohos\hap\entry-default-signed.hap'
     if (Test-Path $HapPath) {
@@ -29,5 +68,6 @@ try {
     }
 }
 finally {
+    Restore-TrackedProfile
     Pop-Location
 }

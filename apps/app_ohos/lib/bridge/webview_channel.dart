@@ -1,111 +1,164 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
+import 'package:venera/foundation/log.dart';
+
+class CloudflarePassResult {
+  CloudflarePassResult({
+    required this.url,
+    required this.cookies,
+    this.userAgent,
+  });
+
+  final String url;
+  final Map<String, String> cookies;
+  final String? userAgent;
+}
 
 class WebViewChannel {
   static const MethodChannel _channel = MethodChannel('com.venera.webview');
 
-  static Future<void> openWebView({required String url}) async {
-    await _channel.invokeMethod<void>('open', {'url': url});
-  }
+  static Completer<CloudflarePassResult?>? _cfCompleter;
+  static String? _pendingUserAgent;
+  static bool _handlersRegistered = false;
 
-  static void registerHandlers({
-    required void Function(List<Map<String, String>> cookies) onCookiesReceived,
-    required void Function(String url) onCloudflareDetected,
-    required void Function(List<Map<String, String>> cookies) onCloudflareResolved,
-  }) {
-    _channel.setMethodCallHandler((call) async {
-      switch (call.method) {
-        case 'onCookiesReceived':
-          final raw = call.arguments as List<dynamic>;
-          final cookies = raw
-              .map((e) => (e as Map<dynamic, dynamic>)
-                  .map((k, v) => MapEntry(k.toString(), v.toString())))
-              .toList();
-          onCookiesReceived(cookies);
-          return null;
-        case 'onCloudflareDetected':
-          onCloudflareDetected(call.arguments as String);
-          return null;
-        case 'onCloudflareResolved':
-          final raw = call.arguments as List<dynamic>;
-          final cookies = raw
-              .map((e) => (e as Map<dynamic, dynamic>)
-                  .map((k, v) => MapEntry(k.toString(), v.toString())))
-              .toList();
-          onCloudflareResolved(cookies);
-          return null;
-        default:
-          throw MissingPluginException(
-            'No implementation for method ${call.method}',
-          );
-      }
-    });
-  }
-
-  static Future<void> evaluateJs({required String jsCode}) async {
-    await _channel.invokeMethod<void>('evaluateJs', {'jsCode': jsCode});
-  }
-
-  static Future<String?> getCurrentUrl() async {
-    return await _channel.invokeMethod<String>('getCurrentUrl');
-  }
-
-  static Future<Map<String, String>> getCookies(String url) async {
-    var result = await _channel.invokeMethod<List<dynamic>>('getCookies', {'url': url});
-    if (result == null) return {};
-    var cookies = <String, String>{};
-    for (var item in result) {
-      if (item is Map<dynamic, dynamic>) {
-        var map = item.map((k, v) => MapEntry(k.toString(), v.toString()));
-        cookies[map['name'] ?? ''] = map['value'] ?? '';
+  /// Parse `"a=1; b=2"` cookie header into a name/value map.
+  static Map<String, String> parseCookieString(String raw) {
+    final cookies = <String, String>{};
+    for (final part in raw.split(';')) {
+      final trimmed = part.trim();
+      if (trimmed.isEmpty) continue;
+      final eq = trimmed.indexOf('=');
+      if (eq <= 0) continue;
+      final name = trimmed.substring(0, eq).trim();
+      final value = trimmed.substring(eq + 1).trim();
+      if (name.isNotEmpty) {
+        cookies[name] = value;
       }
     }
-    cookies.removeWhere((key, value) => key.isEmpty);
     return cookies;
   }
 
-  static Future<void> loadUrl(String url) async {
-    await _channel.invokeMethod<void>('loadUrl', {'url': url});
+  static Map<String, dynamic>? _asStringKeyedMap(dynamic args) {
+    if (args is! Map) return null;
+    return args.map((k, v) => MapEntry(k.toString(), v));
   }
 
-  static Future<dynamic> evalJs(String jsCode) async {
-    return await _channel.invokeMethod<dynamic>('evalJs', {'jsCode': jsCode});
+  static void ensureHandlers() {
+    if (_handlersRegistered) return;
+    _handlersRegistered = true;
+    _channel.setMethodCallHandler(_onMethodCall);
   }
 
-  static Future<void> clearCookies(String url) async {
-    await _channel.invokeMethod<void>('clearCookies', {'url': url});
+  static Future<dynamic> _onMethodCall(MethodCall call) async {
+    switch (call.method) {
+      case 'onCookiesReceived':
+        // Informational; CF flow waits for onCloudflareResolved.
+        return null;
+      case 'onCloudflareDetected':
+        final map = _asStringKeyedMap(call.arguments);
+        final url = map?['url']?.toString() ?? call.arguments?.toString();
+        Log.info('WebViewChannel', 'Cloudflare challenge detected: $url');
+        return null;
+      case 'onCloudflareResolved':
+        _handleCloudflareResolved(call.arguments);
+        return null;
+      case 'onUserAgentReceived':
+        final map = _asStringKeyedMap(call.arguments);
+        final ua = map?['userAgent']?.toString();
+        if (ua != null && ua.isNotEmpty) {
+          _pendingUserAgent = ua;
+        }
+        return null;
+      case 'onClosed':
+        _handleClosed();
+        return null;
+      default:
+        Log.warning(
+          'WebViewChannel',
+          'Unhandled method from native: ${call.method}',
+        );
+        return null;
+    }
+  }
+
+  static void _handleCloudflareResolved(dynamic arguments) {
+    final completer = _cfCompleter;
+    if (completer == null || completer.isCompleted) return;
+
+    final map = _asStringKeyedMap(arguments);
+    if (map == null) {
+      Log.error('WebViewChannel', 'onCloudflareResolved: invalid args');
+      return;
+    }
+
+    final url = map['url']?.toString() ?? '';
+    final cookiesRaw = map['cookies']?.toString() ?? '';
+    final cookies = parseCookieString(cookiesRaw);
+    if (!cookies.containsKey('cf_clearance')) {
+      Log.info(
+        'WebViewChannel',
+        'onCloudflareResolved without cf_clearance, ignoring',
+      );
+      return;
+    }
+
+    final ua = map['userAgent']?.toString() ?? _pendingUserAgent;
+    Log.info(
+      'WebViewChannel',
+      'Cloudflare resolved for $url, cookies=${cookies.length}, ua=${ua != null}',
+    );
+    completer.complete(
+      CloudflarePassResult(url: url, cookies: cookies, userAgent: ua),
+    );
+  }
+
+  static void _handleClosed() {
+    final completer = _cfCompleter;
+    if (completer == null || completer.isCompleted) return;
+    Log.info('WebViewChannel', 'WebView closed without Cloudflare resolve');
+    completer.complete(null);
+  }
+
+  static Future<void> openWebView({required String url}) async {
+    ensureHandlers();
+    await _channel.invokeMethod<void>('open', {'url': url});
+  }
+
+  /// Opens native WebViewAbility and waits until CF is resolved or the page is closed.
+  /// Returns null if the user cancelled / closed without `cf_clearance`.
+  static Future<CloudflarePassResult?> waitForCloudflare(String url) async {
+    ensureHandlers();
+    if (_cfCompleter != null && !_cfCompleter!.isCompleted) {
+      _cfCompleter!.complete(null);
+    }
+    _pendingUserAgent = null;
+    _cfCompleter = Completer<CloudflarePassResult?>();
+    try {
+      await openWebView(url: url);
+    } catch (e, s) {
+      Log.error('WebViewChannel', 'Failed to open WebView: $e\n$s');
+      if (!_cfCompleter!.isCompleted) {
+        _cfCompleter!.complete(null);
+      }
+      _cfCompleter = null;
+      return null;
+    }
+    try {
+      return await _cfCompleter!.future;
+    } finally {
+      _cfCompleter = null;
+      _pendingUserAgent = null;
+    }
   }
 
   static Future<void> close() async {
-    await _channel.invokeMethod<void>('close');
-  }
-
-  static Future<Map<String, String>> getLocalStorage() async {
     try {
-      var result = await _channel.invokeMethod<Map<dynamic, dynamic>>('getLocalStorage');
-      if (result == null) return {};
-      var localStorage = <String, String>{};
-      result.forEach((key, value) {
-        localStorage[key.toString()] = value.toString();
-      });
-      return localStorage;
-    } on MissingPluginException {
-      return {};
-    }
-  }
-
-  static Future<String?> getUserAgent() async {
-    try {
-      return await _channel.invokeMethod<String>('getUserAgent');
-    } on MissingPluginException {
-      return null;
-    }
-  }
-
-  static Future<void> clearCache() async {
-    try {
-      await _channel.invokeMethod<void>('clearCache');
+      await _channel.invokeMethod<void>('close');
     } on MissingPluginException {
       //
+    } catch (e) {
+      Log.warning('WebViewChannel', 'close failed: $e');
     }
   }
 }

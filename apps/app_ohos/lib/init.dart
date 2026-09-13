@@ -9,6 +9,7 @@ import 'package:venera/foundation/comic_source/comic_source.dart';
 import 'package:venera/foundation/image_provider/image_favorites_provider.dart';
 import 'package:venera/foundation/js_engine.dart';
 import 'package:venera/foundation/log.dart';
+import 'package:venera/bridge/webview_channel.dart';
 import 'package:venera/network/cookie_jar.dart';
 import 'package:venera/pages/comic_source_page.dart';
 import 'package:venera/pages/follow_updates_page.dart';
@@ -37,6 +38,9 @@ Future<void> init() async {
   await App.init().wait();
   await ImageFavoritesProvider.migrateFromCacheIfNeeded().wait();
   await SingleInstanceCookieJar.createInstance();
+  // Own com.venera.webview callbacks so AppWebview/DesktopWebview cannot
+  // overwrite the Cloudflare Ability push path.
+  WebViewChannel.ensureHandlers();
   try {
     var futures = [
       App.initComponents(),

@@ -1,14 +1,13 @@
 import { webview } from '@kit.ArkWeb';
 import { WebViewBridge } from '../bridge/WebViewBridge';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { BusinessError } from '@kit.BasicServicesKit';
 import { common } from '@kit.AbilityKit';
 
 const TAG: string = 'WebViewPage';
 const DOMAIN: number = 0x0000;
 const CF_CLEARANCE: string = 'cf_clearance';
-const CF_CHALLENGE: string = 'cf-chl-bypass';
 const STORAGE_KEY_URL: string = 'webview_target_url';
+const STORAGE_KEY_CLOSE: string = 'webview_should_close';
 
 @Entry
 @Component
@@ -19,13 +18,30 @@ struct WebViewPage {
   @State canGoBack: boolean = false;
   @State canGoForward: boolean = false;
   @StorageLink(STORAGE_KEY_URL) initialUrl: string = '';
+  @StorageLink(STORAGE_KEY_CLOSE) @Watch('onShouldCloseChanged') shouldClose: boolean = false;
   private controller: webview.WebviewController = new webview.WebviewController();
   private bridge: WebViewBridge = new WebViewBridge();
+  private resolved: boolean = false;
+  private closedNotified: boolean = false;
 
   aboutToAppear(): void {
     this.currentUrl = this.initialUrl;
+    this.resolved = false;
+    this.closedNotified = false;
+    AppStorage.setOrCreate<boolean>(STORAGE_KEY_CLOSE, false);
     webview.WebviewController.setWebDebuggingAccess(true);
     hilog.info(DOMAIN, TAG, 'WebViewPage aboutToAppear, url: ' + this.initialUrl);
+  }
+
+  aboutToDisappear(): void {
+    this.notifyClosedIfNeeded();
+  }
+
+  onShouldCloseChanged(): void {
+    if (this.shouldClose) {
+      hilog.info(DOMAIN, TAG, 'Close requested via AppStorage');
+      this.onClose();
+    }
   }
 
   build() {
@@ -88,7 +104,6 @@ struct WebViewPage {
               this.isLoading = true;
               this.updateNavigationState();
               hilog.info(DOMAIN, TAG, 'Page begin: ' + event.url);
-              this.checkCloudflare(event.url);
             }
           })
           .onPageEnd((event) => {
@@ -97,6 +112,7 @@ struct WebViewPage {
               this.updateNavigationState();
               hilog.info(DOMAIN, TAG, 'Page end: ' + event.url);
               this.extractCookies(event.url);
+              this.checkCloudflareResolved(event.url);
             }
           })
           .onTitleReceive((event) => {
@@ -124,42 +140,99 @@ struct WebViewPage {
   }
 
   private updateNavigationState(): void {
-    this.canGoBack = this.controller.accessBackward();
-    this.canGoForward = this.controller.accessForward();
+    try {
+      this.canGoBack = this.controller.accessBackward();
+      this.canGoForward = this.controller.accessForward();
+    } catch (e) {
+      hilog.warn(DOMAIN, TAG, 'updateNavigationState failed');
+    }
   }
 
   private onGoBack(): void {
-    if (this.controller.accessBackward()) {
-      this.controller.backward();
+    try {
+      if (this.controller.accessBackward()) {
+        this.controller.backward();
+      }
+    } catch (e) {
+      hilog.warn(DOMAIN, TAG, 'onGoBack failed');
     }
   }
 
   private onGoForward(): void {
-    if (this.controller.accessForward()) {
-      this.controller.forward();
+    try {
+      if (this.controller.accessForward()) {
+        this.controller.forward();
+      }
+    } catch (e) {
+      hilog.warn(DOMAIN, TAG, 'onGoForward failed');
     }
   }
 
   private onClose(): void {
-    let context: common.UIAbilityContext = this.getUIContext().getHostContext() as common.UIAbilityContext;
-    context.terminateSelf();
+    this.notifyClosedIfNeeded();
+    try {
+      let context: common.UIAbilityContext = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      context.terminateSelf();
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'terminateSelf failed on close');
+    }
   }
 
-  private checkCloudflare(url: string): void {
+  private notifyClosedIfNeeded(): void {
+    if (this.closedNotified || this.resolved) {
+      return;
+    }
+    this.closedNotified = true;
+    this.bridge.onClosed();
+    hilog.info(DOMAIN, TAG, 'Notified Flutter: onClosed');
+  }
+
+  private async checkCloudflareResolved(url: string): Promise<void> {
+    if (this.resolved) {
+      return;
+    }
     try {
       let cookies: string = webview.WebCookieManager.fetchCookieSync(url);
-      let hasCfChallenge: boolean = cookies.indexOf(CF_CHALLENGE) !== -1;
-      let hasCfClearance: boolean = cookies.indexOf(CF_CLEARANCE) !== -1;
-      if (hasCfChallenge && !hasCfClearance) {
-        this.bridge.onCloudflareDetected(url);
-        hilog.info(DOMAIN, TAG, 'Cloudflare challenge detected for: ' + url);
-      } else if (hasCfClearance) {
-        this.bridge.onCloudflareResolved(url, cookies);
-        hilog.info(DOMAIN, TAG, 'Cloudflare resolved for: ' + url);
+      if (!this.cookieHas(cookies, CF_CLEARANCE)) {
+        return;
       }
+      this.resolved = true;
+      let ua: string = await this.getUserAgent();
+      if (ua.length > 0) {
+        this.bridge.onUserAgentReceived(ua);
+      }
+      this.bridge.onCloudflareResolved(url, cookies, ua);
+      hilog.info(DOMAIN, TAG, 'Cloudflare resolved for: ' + url);
+      // Auto-close after successful verification.
+      setTimeout((): void => {
+        this.onCloseAfterResolve();
+      }, 300);
     } catch (e) {
-      hilog.error(DOMAIN, TAG, 'Cookie check failed');
+      hilog.error(DOMAIN, TAG, 'Cloudflare resolve check failed');
+      this.resolved = false;
     }
+  }
+
+  private onCloseAfterResolve(): void {
+    // Already resolved — skip onClosed so Flutter does not treat as cancel.
+    this.closedNotified = true;
+    try {
+      let context: common.UIAbilityContext = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      context.terminateSelf();
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'terminateSelf failed after resolve');
+    }
+  }
+
+  private cookieHas(cookieHeader: string, name: string): boolean {
+    let parts: string[] = cookieHeader.split(';');
+    for (let i = 0; i < parts.length; i++) {
+      let part: string = parts[i].trim();
+      if (part === name || part.indexOf(name + '=') === 0) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private extractCookies(url: string): void {
@@ -168,10 +241,6 @@ struct WebViewPage {
       if (cookies.length > 0) {
         this.bridge.onCookiesReceived(url, cookies);
         hilog.info(DOMAIN, TAG, 'Cookies extracted for: ' + url);
-        let hasCfClearance: boolean = cookies.indexOf(CF_CLEARANCE) !== -1;
-        if (hasCfClearance) {
-          this.bridge.onCloudflareResolved(url, cookies);
-        }
       }
     } catch (e) {
       hilog.error(DOMAIN, TAG, 'Cookie extraction failed');
@@ -205,6 +274,10 @@ struct WebViewPage {
     let jsCode: string = 'navigator.userAgent';
     try {
       let result: string = await this.controller.runJavaScript(jsCode) as string;
+      // ArkWeb may wrap the result in quotes.
+      if (result.length >= 2 && result.charAt(0) === '"' && result.charAt(result.length - 1) === '"') {
+        result = result.substring(1, result.length - 1);
+      }
       return result;
     } catch (e) {
       hilog.error(DOMAIN, TAG, 'Failed to get UserAgent: ' + e);

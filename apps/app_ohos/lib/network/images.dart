@@ -5,9 +5,12 @@ import 'package:flutter_qjs/flutter_qjs.dart';
 import 'package:venera/foundation/cache_manager.dart';
 import 'package:venera/foundation/comic_source/comic_source.dart';
 import 'package:venera/foundation/consts.dart';
+import 'package:venera/foundation/log.dart';
 import 'package:venera/utils/image.dart';
 
 import 'app_dio.dart';
+import 'cloudflare.dart';
+import 'webview_fetch.dart';
 
 abstract class ImageDownloader {
   static Stream<ImageDownloadProgress> loadThumbnail(
@@ -222,6 +225,32 @@ abstract class ImageDownloader {
         return;
       } catch (e) {
         if (retryLimit < 0 || onLoadFailed == null) {
+          // Cloudflare blocks the dart:io HttpClient but not the WebView;
+          // fetch the image through the WebView as a last resort.
+          if (isCloudflareError(e)) {
+            final wf = await WebviewFetch.fetch(
+              url: (configs['url'] as String?) ?? imageKey,
+              method: (configs['method'] as String?) ?? 'GET',
+              headers: configs['headers'] is Map
+                  ? Map<String, dynamic>.from(configs['headers'] as Map)
+                  : null,
+              data: configs['data'],
+            );
+            if (wf != null && wf.bodyBytes != null) {
+              final bytes = wf.bodyBytes!;
+              await CacheManager().writeCache(cacheKey, bytes);
+              yield ImageDownloadProgress(
+                currentBytes: bytes.length,
+                totalBytes: bytes.length,
+                imageBytes: bytes,
+              );
+              return;
+            }
+            Log.warning(
+              'ImageDownloader',
+              'WebView fallback failed for ${configs['url'] ?? imageKey}',
+            );
+          }
           rethrow;
         }
         var newConfig = await onLoadFailed();

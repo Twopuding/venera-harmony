@@ -7,6 +7,9 @@ const CHANNEL_NAME: string = 'com.venera.webview';
 const TAG: string = 'WebViewBridge';
 const DOMAIN: number = 0x0000;
 const STORAGE_KEY_URL: string = 'webview_target_url';
+const STORAGE_KEY_CLOSE: string = 'webview_should_close';
+const BUNDLE_NAME: string = 'com.venera.ohos';
+const WEBVIEW_ABILITY: string = 'WebViewAbility';
 
 export class WebViewBridge implements MethodCallHandler {
   private bridge: FlutterBridge = FlutterBridge.getInstance();
@@ -23,6 +26,8 @@ export class WebViewBridge implements MethodCallHandler {
   onMethodCall(call: BridgeMethodCall, result: MethodResult): void {
     if (call.method === 'open') {
       this.handleOpen(call, result);
+    } else if (call.method === 'close') {
+      this.handleClose(result);
     } else {
       result.notImplemented();
     }
@@ -36,9 +41,10 @@ export class WebViewBridge implements MethodCallHandler {
     }
     let url: string = this.extractUrl(call.args);
     AppStorage.setOrCreate<string>(STORAGE_KEY_URL, url);
+    AppStorage.setOrCreate<boolean>(STORAGE_KEY_CLOSE, false);
     let want: Want = {
-      bundleName: 'com.venera.ohos',
-      abilityName: 'WebViewAbility'
+      bundleName: BUNDLE_NAME,
+      abilityName: WEBVIEW_ABILITY
     };
     this.context.context.startAbility(want).then(() => {
       hilog.info(DOMAIN, TAG, 'WebViewAbility started successfully');
@@ -47,6 +53,13 @@ export class WebViewBridge implements MethodCallHandler {
       hilog.error(DOMAIN, TAG, 'Failed to start WebViewAbility: ' + err.message);
       result.error('ERROR', 'Failed to start WebViewAbility', err.message);
     });
+  }
+
+  private handleClose(result: MethodResult): void {
+    // WebViewPage watches this flag and calls terminateSelf.
+    AppStorage.setOrCreate<boolean>(STORAGE_KEY_CLOSE, true);
+    hilog.info(DOMAIN, TAG, 'Close flag set for WebViewAbility');
+    result.success(null);
   }
 
   private extractUrl(args: Object | null): string {
@@ -80,10 +93,11 @@ export class WebViewBridge implements MethodCallHandler {
     this.bridge.invokeMethod(CHANNEL_NAME, 'onCloudflareDetected', params);
   }
 
-  onCloudflareResolved(url: string, cookies: string): void {
+  onCloudflareResolved(url: string, cookies: string, userAgent: string): void {
     let params: WebViewCloudflareParams = {
       url: url,
-      cookies: cookies
+      cookies: cookies,
+      userAgent: userAgent
     };
     this.bridge.invokeMethod(CHANNEL_NAME, 'onCloudflareResolved', params);
   }
@@ -100,6 +114,10 @@ export class WebViewBridge implements MethodCallHandler {
       userAgent: userAgent
     };
     this.bridge.invokeMethod(CHANNEL_NAME, 'onUserAgentReceived', params);
+  }
+
+  onClosed(): void {
+    this.bridge.invokeMethod(CHANNEL_NAME, 'onClosed', null);
   }
 }
 
@@ -119,6 +137,7 @@ interface WebViewUrlParams {
 interface WebViewCloudflareParams {
   url: string;
   cookies: string;
+  userAgent: string;
 }
 
 interface WebViewLocalStorageParams {
