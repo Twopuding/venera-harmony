@@ -50,17 +50,68 @@ class WebViewChannel {
     _channel.setMethodCallHandler(_onMethodCall);
   }
 
+  // ---- Native shell bootstrap callbacks (HDS native UI) ----
+
+  static void Function(List<Map<String, String>> cookies)? _cookieSink;
+  static void Function(String url)? _challengeSink;
+  static void Function(List<Map<String, String>> cookies)? _resolvedSink;
+
+  /// Normalize a native cookie payload (header string or entry list).
+  static List<Map<String, String>> _toEntries(dynamic raw, String url) {
+    if (raw is List) {
+      return raw
+          .whereType<Map>()
+          .map((m) => m.map((k, v) => MapEntry(k.toString(), v?.toString() ?? '')))
+          .toList();
+    }
+    final header = raw?.toString() ?? '';
+    if (header.isEmpty) return const [];
+    return parseCookieString(header)
+        .entries
+        .map((e) => <String, String>{
+              'name': e.key,
+              'value': e.value,
+              'domain': url,
+            })
+        .toList();
+  }
+
+  /// Register native->Dart webview callbacks (used when the native shell
+  /// renders the UI and Dart runs headless).
+  static void registerHandlers({
+    void Function(List<Map<String, String>> cookies)? onCookiesReceived,
+    void Function(String url)? onCloudflareDetected,
+    void Function(List<Map<String, String>> cookies)? onCloudflareResolved,
+  }) {
+    _cookieSink = onCookiesReceived;
+    _challengeSink = onCloudflareDetected;
+    _resolvedSink = onCloudflareResolved;
+    ensureHandlers();
+  }
+
   static Future<dynamic> _onMethodCall(MethodCall call) async {
     switch (call.method) {
       case 'onCookiesReceived':
-        // Informational; CF flow waits for onCloudflareResolved.
+        final cookieMap = _asStringKeyedMap(call.arguments);
+        final cookieUrl = cookieMap?['url']?.toString() ?? '';
+        _cookieSink?.call(
+          _toEntries(cookieMap?['cookies'] ?? call.arguments, cookieUrl),
+        );
         return null;
       case 'onCloudflareDetected':
         final map = _asStringKeyedMap(call.arguments);
-        final url = map?['url']?.toString() ?? call.arguments?.toString();
+        final url = map?['url']?.toString() ?? call.arguments?.toString() ?? '';
         Log.info('WebViewChannel', 'Cloudflare challenge detected: $url');
+        _challengeSink?.call(url);
         return null;
       case 'onCloudflareResolved':
+        final resolvedMap = _asStringKeyedMap(call.arguments);
+        _resolvedSink?.call(
+          _toEntries(
+            resolvedMap?['cookies'] ?? call.arguments,
+            resolvedMap?['url']?.toString() ?? '',
+          ),
+        );
         _handleCloudflareResolved(call.arguments);
         return null;
       case 'onUserAgentReceived':

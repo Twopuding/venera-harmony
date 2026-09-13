@@ -556,6 +556,47 @@ export class PlatformBridge implements MethodCallHandler {
   private handleGetProxy(result: MethodResult): void {
     result.success('No Proxy');
   }
+
+  private handleGetWebCookies(call: BridgeMethodCall, result: MethodResult): void {
+    let url: string = '';
+    try {
+      if (call.args !== null) {
+        let jsonStr: string = JSON.stringify(call.args);
+        let parsed: GetWebCookiesParams = JSON.parse(jsonStr);
+        if (parsed.url !== undefined && parsed.url !== null) {
+          url = parsed.url;
+        }
+      }
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'getWebCookies: failed to parse args');
+    }
+    if (url.length === 0) {
+      result.error('ERROR', 'url is required', null);
+      return;
+    }
+    // Force cookie flush to disk before read, avoids miss on fresh Set-Cookie.
+    webview.WebCookieManager.saveCookieAsync().then(() => {
+      this.fetchWebCookiesForUrl(url, result);
+    }).catch((err: BusinessError) => {
+      hilog.warn(DOMAIN, TAG,
+        'getWebCookies saveCookieAsync failed, fetch anyway: ' + err.message);
+      this.fetchWebCookiesForUrl(url, result);
+    });
+  }
+
+  private fetchWebCookiesForUrl(url: string, result: MethodResult): void {
+    try {
+      let cookies: string = webview.WebCookieManager.fetchCookieSync(url);
+      let hasClearance: boolean = cookies.indexOf('cf_clearance=') >= 0;
+      hilog.warn(DOMAIN, TAG,
+        'getWebCookies for ' + url + ' len=' + cookies.length.toString() +
+        ' cf_clearance=' + hasClearance.toString());
+      result.success(cookies);
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'getWebCookies failed');
+      result.error('ERROR', 'fetchCookieSync failed', null);
+    }
+  }
 }
 
 interface LaunchUrlParams {
@@ -702,46 +743,6 @@ export class PlatformBiometricAuth {
     return authorized;
   }
 
-  private handleGetWebCookies(call: BridgeMethodCall, result: MethodResult): void {
-    let url: string = '';
-    try {
-      if (call.args !== null) {
-        let jsonStr: string = JSON.stringify(call.args);
-        let parsed: GetWebCookiesParams = JSON.parse(jsonStr);
-        if (parsed.url !== undefined && parsed.url !== null) {
-          url = parsed.url;
-        }
-      }
-    } catch (e) {
-      hilog.error(DOMAIN, TAG, 'getWebCookies: failed to parse args');
-    }
-    if (url.length === 0) {
-      result.error('ERROR', 'url is required', null);
-      return;
-    }
-    // Force cookie flush to disk before read — reduces miss on fresh Set-Cookie.
-    webview.WebCookieManager.saveCookieAsync().then(() => {
-      this.fetchWebCookiesForUrl(url, result);
-    }).catch((err: BusinessError) => {
-      hilog.warn(DOMAIN, TAG,
-        'getWebCookies saveCookieAsync failed, fetch anyway: ' + err.message);
-      this.fetchWebCookiesForUrl(url, result);
-    });
-  }
-
-  private fetchWebCookiesForUrl(url: string, result: MethodResult): void {
-    try {
-      let cookies: string = webview.WebCookieManager.fetchCookieSync(url);
-      let hasClearance: boolean = cookies.indexOf('cf_clearance=') >= 0;
-      hilog.warn(DOMAIN, TAG,
-        'getWebCookies for ' + url + ' len=' + cookies.length.toString() +
-        ' cf_clearance=' + hasClearance.toString());
-      result.success(cookies);
-    } catch (e) {
-      hilog.error(DOMAIN, TAG, 'getWebCookies failed');
-      result.error('ERROR', 'fetchCookieSync failed', null);
-    }
-  }
 }
 
 interface GetWebCookiesParams {
