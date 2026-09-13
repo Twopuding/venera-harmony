@@ -81,6 +81,9 @@ plugins/flutter_inappwebview_repo/
 plugins/sqlite3_ohos/build/
 
 # ===== Local debug artifacts (hilog dumps, crash stacks, ad-hoc build logs) =====
+**/build_out.txt
+**/build_deveco.txt
+**/build_info.txt
 /crash_stack*.txt
 /device_logs*.txt
 /device_appdata.json

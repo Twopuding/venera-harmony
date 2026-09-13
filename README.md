@@ -1,8 +1,8 @@
 # Venera HarmonyOS
 
-[Venera](https://github.com/venera-app/venera) 漫画阅读器的 HarmonyOS 移植版。默认使用 **ArkTS/ArkUI 原生 UI**（HarmonyOS 6.1 API 23 沉浸光感材质），Flutter 以 headless 模式提供数据层（QuickJS 漫画源、SQLite、Dio、Manager 单例）。设置中可将 `useNativeUi` 设为 `false` 回退至 Flutter Material UI。
+[Venera](https://github.com/venera-app/venera) 漫画阅读器的 HarmonyOS 移植版。目标平台 **HarmonyOS 7.0.0 / API 26**（`compatibleSdkVersion` 与 `targetSdkVersion` 均为 `26.0.0`）。当前默认使用 **ArkTS/ArkUI 原生 UI**（HDS 沉浸光感材质），Flutter 以 headless 模式提供数据层（QuickJS 漫画源、SQLite、Dio、Manager 单例）；设置中可将 `useNativeUi` 设为 `false` 回退至 Flutter Material UI。**下一步是把数据层也原生化，最终移除 Flutter**，见 [docs/NATIVE_MIGRATION_PLAN.md](docs/NATIVE_MIGRATION_PLAN.md)。
 
-**应用标识**：`bundleName` 为 `com.venera.ohos`，版本 `0.1.0`（见 [`app.json5`](apps/app_ohos/ohos/AppScope/app.json5)）。
+**应用标识**：`bundleName` 为 `com.venera.ohos`，版本 `1.6.5`（见 [`app.json5`](apps/app_ohos/ohos/AppScope/app.json5)）。
 
 ## 功能特性
 
@@ -20,15 +20,17 @@
 
 | 分支 | 用途 |
 |------|------|
-| `main` | 稳定线，Flutter UI + 数据层混合架构 |
-| `HDS_UI` | ArkUI 1:1 迁移开发分支（**迁移已完成**，待合并至 `main`） |
+| `main` | 历史稳定线（Flutter UI + Dart 数据层），仅供回溯 |
+| `HDS_UI` | **当前开发主线**：ArkTS/ArkUI 原生 UI + HDS；已并入 `main` 全部改动（inappwebview / Cloudflare 免验证等） |
 
 ```bash
-git checkout main      # 稳定版（Flutter UI）
-git checkout HDS_UI    # 原生 UI 开发线（ArkUI + HDS）
+git checkout HDS_UI    # 当前开发主线（原生 UI，ArkUI + HDS）
+git checkout main      # 历史稳定线（Flutter UI）
 ```
 
 远程仓库：[https://github.com/Twopuding/venera-harmony](https://github.com/Twopuding/venera-harmony)
+
+> 推送需要能访问 GitHub（当前开发机直连不通，需 VPN/代理）；本地提交不受影响。
 
 ## 迁移状态
 
