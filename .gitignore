@@ -69,5 +69,16 @@ local.properties
 # ===== Plugin reference source (contains .git submodule) =====
 plugins/flutter_qjs/source/
 
+# Large OHOS inappwebview checkout (use scripts/fetch-inappwebview.ps1)
+plugins/flutter_inappwebview_repo/
+
 # ===== sqlite3 build intermediates =====
 plugins/sqlite3_ohos/build/
+
+# ===== Local debug artifacts (hilog dumps, crash stacks, ad-hoc build logs) =====
+/crash_stack*.txt
+/device_logs*.txt
+/device_appdata.json
+/device_cf_log.txt
+/device_hilog_pid.txt
+/hap_build.log
