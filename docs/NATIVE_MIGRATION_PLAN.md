@@ -1,7 +1,7 @@
 # Venera HarmonyOS：以 API 26 原生实现替代 Flutter（迁移计划）
 
 > 状态快照：Git 收敛（A1/A2/A3）已在本地完成，见本文末尾「Git 收敛记录」。
-> 本文件是唯一权威计划；配合 [PORT_MAP.md](PORT_MAP.md)（逐模块/逐接口归属）与 [PARITY_CHECKLIST.md](PARITY_CHECKLIST.md)（回归清单）使用。
+> 本文件是唯一权威计划；配合 [PORT_MAP.md](PORT_MAP.md)（逐模块/逐接口归属）、[HDS_UI_GAPS.md](HDS_UI_GAPS.md)（原生 UI 未完全实现清单）与 [API26_CONFORMANCE.md](API26_CONFORMANCE.md)（API 26 合规与整改记录）使用。
 
 ## 1. 目标与成功标准
 

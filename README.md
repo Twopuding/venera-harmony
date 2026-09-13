@@ -46,6 +46,8 @@ ArkUI 全量 UI 迁移已在 `HDS_UI` 分支完成；`useNativeUi` 默认为 `tr
 
 详细验收记录见 [docs/PARITY_REPORT.md](docs/PARITY_REPORT.md)；手动回归清单见 [docs/PARITY_CHECKLIST.md](docs/PARITY_CHECKLIST.md)。
 
+**未完成项与合规状态**：原生 UI 尚未完全实现的功能清单见 [docs/HDS_UI_GAPS.md](docs/HDS_UI_GAPS.md)；当前工程与 API 26 的偏差、废弃 API 替换记录与 lint 基线见 [docs/API26_CONFORMANCE.md](docs/API26_CONFORMANCE.md)。
+
 ## 快速开始
 
 ### 前置条件
